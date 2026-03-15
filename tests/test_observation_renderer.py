@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from root_engine.engine import RootEngine
 from root_engine.enums import Faction
+from root_engine.render import TextRenderer, VisualRenderer, get_renderer
 from root_engine.renderer import RootRenderer
 
 
@@ -38,3 +39,23 @@ def test_renderer_renders_full_state_and_observation() -> None:
     assert "hand=[" in full
     assert "Observer: marquise" in partial
     assert "hidden(count=" in partial
+
+
+def test_visual_renderer_outputs_svg_and_respects_hidden_hands() -> None:
+    engine = RootEngine(seed=99)
+    renderer = VisualRenderer()
+
+    full_svg = renderer.render(engine.get_state())
+    marquise_obs = engine.get_observation(Faction.MARQUISE)
+    obs_svg = renderer.render(marquise_obs)
+
+    assert full_svg.startswith("<svg")
+    assert "Faction Status" in full_svg
+    assert "hidden(" not in full_svg
+    assert "Observer: marquise" in obs_svg
+    assert "hidden(" in obs_svg
+
+
+def test_renderer_factory_returns_requested_renderers() -> None:
+    assert isinstance(get_renderer("text"), TextRenderer)
+    assert isinstance(get_renderer("visual"), VisualRenderer)
