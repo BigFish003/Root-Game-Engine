@@ -9,10 +9,22 @@ text_renderer = TextRenderer()
 visual_renderer = VisualRenderer()
 
 marquise_observation = engine.get_observation(Faction.MARQUISE)
-visual_renderer.render_to_file(marquise_observation, "root_marquise_observation1.svg")
+visual_renderer.render_to_file(marquise_observation, "observations/root_marquise_observation0.svg")
 
-actions = engine.get_valid_actions()
-engine.apply_action(actions[1])
+action_indices = [2,2,2,2,2,2,2,2,2]
 
-marquise_observation = engine.get_observation(Faction.MARQUISE)
-visual_renderer.render_to_file(marquise_observation, "root_marquise_observation2.svg")
+
+
+for i in range(len(action_indices)):
+    valid_actions = engine.get_valid_actions()
+    print(valid_actions)
+    engine.apply_action(valid_actions[action_indices[i]])
+
+    marquise_observation = engine.get_observation(Faction.MARQUISE)
+    visual_renderer.render_to_file(marquise_observation, f"observations/root_marquise_observation{i+1}.svg")
+
+valid_actions = engine.get_valid_actions()
+print(valid_actions)
+
+
+
