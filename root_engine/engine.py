@@ -19,6 +19,7 @@ from .actions import (
 )
 from .enums import DecisionType, Faction
 from .models import GameState
+from .observation import Observation, build_observation
 from .rules import base_rules, eyrie, marquise
 from .rules.scoring import WINNING_SCORE
 from .state import clone_state, create_initial_state
@@ -41,6 +42,9 @@ class RootEngine:
 
     def get_valid_actions(self) -> list:
         return get_valid_actions(self._state)
+
+    def get_observation(self, faction: Faction) -> Observation:
+        return build_observation(self._state, faction)
 
     def apply_action(self, action) -> None:
         if not any(a == action for a in self.get_valid_actions()):
