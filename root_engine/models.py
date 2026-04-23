@@ -78,8 +78,8 @@ class MarquiseState:
 @dataclass
 class EyrieState:
     warriors_in_supply: int = 20
-    roosts_in_supply: int = 6
-    leader: str = "Charismatic"
+    roosts_in_supply: int = 7
+    leader: str = "charismatic"
     decree: dict[str, list[int]] = field(
         default_factory=lambda: {"recruit": [], "move": [], "battle": [], "build": []}
     )
@@ -94,7 +94,7 @@ class AllianceState:
     bases: dict[Suit, bool] = field(
         default_factory=lambda: {Suit.FOX: False, Suit.RABBIT: False, Suit.MOUSE: False}
     )
-    sympathy_in_supply: int = 9
+    sympathy_in_supply: int = 10
     hand: list[int] = field(default_factory=list)
     crafted_effects: list[str] = field(default_factory=list)
 

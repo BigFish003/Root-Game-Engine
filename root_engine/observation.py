@@ -9,7 +9,6 @@ from .enums import Faction, Suit
 from .models import GameState
 
 ALLIANCE_TOTAL_WARRIORS = 10
-VAGABOND_TOTAL_WARRIORS = 0
 
 
 @dataclass(frozen=True)
@@ -124,17 +123,11 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "wood_tokens_on_map": _count_tokens_on_map(state, faction, "wood"),
         }
     if faction == Faction.EYRIE:
-        decree_suits: dict[str, list[str]] = {}
-        for section, card_ids in state.eyrie.decree.items():
-            decree_suits[section] = [state.cards[cid].suit.value for cid in card_ids if cid in state.cards]
         return {
             "warriors_in_supply": state.eyrie.warriors_in_supply,
             "roosts_in_supply": state.eyrie.roosts_in_supply,
             "leader": state.eyrie.leader,
             "decree": {k: list(v) for k, v in state.eyrie.decree.items()},
-            "decree_suits": decree_suits,
-            "decree_sections": ["recruit", "move", "battle", "build"],
-            "leader_options": ["Despot", "Commander", "Charismatic", "Builder"],
         }
     if faction == Faction.ALLIANCE:
         alliance_bases_remaining = {
@@ -149,7 +142,6 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "supporters_hidden": True,
         }
     return {
-        "warriors_in_supply": _remaining_warriors(state, faction, VAGABOND_TOTAL_WARRIORS),
         "location": state.vagabond.location,
         "satchel": {k.value: v for k, v in state.vagabond.satchel.items()},
         "exhausted_items": {k.value: v for k, v in state.vagabond.exhausted_items.items()},
