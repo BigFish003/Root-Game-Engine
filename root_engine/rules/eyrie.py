@@ -13,7 +13,7 @@ from ..actions import (
     SelectMoveDestination,
     SelectMoveSource,
 )
-from ..enums import BuildingType, DecisionType, Faction
+from ..enums import BuildingType, DecisionType, Faction, Phase
 from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards
@@ -21,6 +21,9 @@ from .movement import legal_move_destinations, legal_move_sources
 
 
 def valid_actions(state: GameState) -> list:
+    if state.turn.phase != Phase.DAYLIGHT:
+        return [EndPhase()]
+
     ctx = state.decision_context
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]

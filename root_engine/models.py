@@ -73,6 +73,8 @@ class MarquiseState:
     keep_clearing: Optional[int] = None
     hand: list[int] = field(default_factory=list)
     crafted_effects: list[str] = field(default_factory=list)
+    daylight_actions_used: int = 0
+    recruit_used_this_turn: bool = False
 
 
 @dataclass

@@ -21,8 +21,7 @@ def test_valid_actions_non_empty_for_start_state() -> None:
     engine = RootEngine(seed=1)
     actions = engine.get_valid_actions()
 
-    assert actions
-    assert any(isinstance(a, EndPhase) for a in actions)
+    assert actions == [EndPhase()]
 
 
 def test_illegal_action_raises() -> None:
@@ -34,6 +33,7 @@ def test_illegal_action_raises() -> None:
 
 def test_recruit_and_build_mutate_state() -> None:
     engine = RootEngine(seed=3)
+    engine.apply_action(EndPhase())
 
     recruit = next(a for a in engine.get_valid_actions() if isinstance(a, Recruit))
     before_supply = engine.get_state().marquise.warriors_in_supply
@@ -47,11 +47,12 @@ def test_recruit_and_build_mutate_state() -> None:
     )
     before_score = engine.get_state().scores[Faction.MARQUISE]
     engine.apply_action(build)
-    assert engine.get_state().scores[Faction.MARQUISE] == before_score + 1
+    assert engine.get_state().scores[Faction.MARQUISE] == before_score + 2
 
 
 def test_atomic_move_selection_changes_context_and_board() -> None:
     engine = RootEngine(seed=4)
+    engine.apply_action(EndPhase())
 
     select_source = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource))
     src = select_source.clearing_id
@@ -91,8 +92,33 @@ def test_deterministic_seed() -> None:
 def test_clone_is_independent() -> None:
     engine = RootEngine(seed=11)
     clone = engine.clone()
+    clone.apply_action(EndPhase())
 
     recruit = next(a for a in clone.get_valid_actions() if isinstance(a, Recruit))
     clone.apply_action(recruit)
 
     assert clone.get_state().marquise.warriors_in_supply != engine.get_state().marquise.warriors_in_supply
+
+
+def test_marquise_birdsong_places_wood_at_sawmills() -> None:
+    engine = RootEngine(seed=13)
+    before_wood = sum(
+        1
+        for token in engine.get_state().board.tokens[1][Faction.MARQUISE]
+        if token.value == "wood"
+    )
+    engine.apply_action(EndPhase())
+    after_wood = sum(
+        1
+        for token in engine.get_state().board.tokens[1][Faction.MARQUISE]
+        if token.value == "wood"
+    )
+    assert after_wood == before_wood + 1
+
+
+def test_marquise_recruit_is_once_per_turn() -> None:
+    engine = RootEngine(seed=17)
+    engine.apply_action(EndPhase())
+    recruit = next(a for a in engine.get_valid_actions() if isinstance(a, Recruit))
+    engine.apply_action(recruit)
+    assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
