@@ -154,12 +154,20 @@ class state_renderer:
             draw.rectangle((left, top, right, top + 34), fill=bg_color, outline="black", width=2)
             draw.text((left + 8, top + 8), title, fill="white", font=font_bold)
 
-        def draw_faction_counts(board_rect: tuple[int, int, int, int], reserve: int, crafted: int) -> int:
+        def draw_faction_counts(
+            board_rect: tuple[int, int, int, int],
+            reserve: int,
+            crafted: int,
+            hand_count: int,
+            victory_points: int,
+        ) -> int:
             left, top, _, _ = board_rect
             text_y = top + 40
             draw.text((left + 8, text_y), f"Reserve: {reserve}", fill="black", font=font)
             draw.text((left + 8, text_y + 16), f"Crafted items: {crafted}", fill="black", font=font)
-            return text_y + 38
+            draw.text((left + 8, text_y + 32), f"Cards in hand: {hand_count}", fill="black", font=font)
+            draw.text((left + 8, text_y + 48), f"Victory points: {victory_points}", fill="black", font=font)
+            return text_y + 70
 
         def normalize_suit_symbol(value: Any) -> str:
             v = str(value).lower()
@@ -191,11 +199,14 @@ class state_renderer:
 
         def draw_marquise_board(board_rect: tuple[int, int, int, int]) -> None:
             draw_faction_header(board_rect, "Marquise de Cat", (168, 98, 24))
-            faction_data = state_dictionary.get("factions", {}).get("marquise", {}).get("public_data", {})
+            marquise = state_dictionary.get("factions", {}).get("marquise", {})
+            faction_data = marquise.get("public_data", {})
             draw_faction_counts(
                 board_rect,
                 int(faction_data.get("warriors_in_supply", 0)),
-                len(state_dictionary.get("factions", {}).get("marquise", {}).get("crafted_effects", [])),
+                len(marquise.get("crafted_effects", [])),
+                int(marquise.get("hand_count", len(marquise.get("hand") or []))),
+                int(marquise.get("score", state_dictionary.get("scores", {}).get("marquise", 0))),
             )
 
             left, _, right, bottom = board_rect
@@ -225,6 +236,8 @@ class state_renderer:
                 board_rect,
                 int(public_data.get("warriors_in_supply", 0)),
                 len(faction.get("crafted_effects", [])),
+                int(faction.get("hand_count", len(faction.get("hand") or []))),
+                int(faction.get("score", state_dictionary.get("scores", {}).get("eyrie", 0))),
             )
 
             leader = str(public_data.get("leader", "")).capitalize()
@@ -266,6 +279,8 @@ class state_renderer:
                 board_rect,
                 int(public_data.get("warriors_in_supply", 0)),
                 len(faction.get("crafted_effects", [])),
+                int(faction.get("hand_count", len(faction.get("hand") or []))),
+                int(faction.get("score", state_dictionary.get("scores", {}).get("alliance", 0))),
             )
 
             officers = int(public_data.get("officers", 0))
@@ -312,7 +327,13 @@ class state_renderer:
         def draw_vagabond_board(board_rect: tuple[int, int, int, int]) -> None:
             draw_faction_header(board_rect, "Vagabond", (85, 85, 85))
             faction = state_dictionary.get("factions", {}).get("vagabond", {})
-            draw_faction_counts(board_rect, 0, len(faction.get("crafted_effects", [])))
+            draw_faction_counts(
+                board_rect,
+                0,
+                len(faction.get("crafted_effects", [])),
+                int(faction.get("hand_count", len(faction.get("hand") or []))),
+                int(faction.get("score", state_dictionary.get("scores", {}).get("vagabond", 0))),
+            )
 
         state_dictionary = self.build_state_dictionary(observation)
 
