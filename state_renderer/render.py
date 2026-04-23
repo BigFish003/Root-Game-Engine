@@ -51,18 +51,24 @@ class state_renderer:
 
         def add_build_spots(center: tuple[int, int], slots: int) -> None:
             cx, cy = center
-            rect_w = 14
-            rect_h = 9
-            spacing = 4
-            total_width = slots * rect_w + (slots - 1) * spacing
-            start_x = cx - total_width / 2
-            y = cy + 20
+            square_size = 10
+            half_size = square_size / 2
+            corner_offset = radius * 0.45
+            slot_offsets = [
+                (-corner_offset, -corner_offset),  # top-left
+                (corner_offset, -corner_offset),   # top-right
+                (-corner_offset, corner_offset),   # bottom-left
+                (corner_offset, corner_offset),    # bottom-right
+            ]
 
-            for slot_index in range(slots):
-                left = start_x + slot_index * (rect_w + spacing)
+            for slot_offset_x, slot_offset_y in slot_offsets[:slots]:
+                slot_center_x = cx + slot_offset_x
+                slot_center_y = cy + slot_offset_y
+                left = slot_center_x - half_size
+                top = slot_center_y - half_size
                 draw.rectangle(
-                    (left, y, left + rect_w, y + rect_h),
-                    fill=(139, 90, 43),
+                    (left, top, left + square_size, top + square_size),
+                    fill=None,
                     outline="black",
                     width=1,
                 )
@@ -90,7 +96,7 @@ class state_renderer:
             11: (330, 270),
             12: (480, 300),
         }
-        radius = 28
+        radius = 35
 
         # Draw paths first so clearings appear on top of paths.
         drawn_edges: set[tuple[int, int]] = set()
@@ -126,7 +132,6 @@ class state_renderer:
             draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
 
             slots = int(clearing_data.get("building_slots", 0))
-            print(slots)
             if slots > 0:
                 add_build_spots(center, slots)
 
