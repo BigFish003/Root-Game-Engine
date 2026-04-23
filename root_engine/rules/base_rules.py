@@ -49,6 +49,7 @@ def _on_daylight_start(state: GameState) -> None:
         state.marquise.daylight_actions_used = 0
         state.marquise.recruit_used_this_turn = False
         initialize_marquise_crafting_power(state)
+        state.marquise.crafting_window_open = True
 
 
 def _resolve_evening_effects(state: GameState) -> None:

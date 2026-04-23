@@ -169,3 +169,18 @@ def test_marquise_can_craft_multiple_cards_with_workshop_budget() -> None:
     )
     engine.apply_action(second_craft)
     assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())
+
+
+def test_marquise_crafting_only_offered_before_non_craft_daylight_action() -> None:
+    engine = RootEngine(seed=29)
+    state = engine.get_state()
+    state.board.buildings[1][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # fox workshop
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.marquise.hand = [anvil]
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
+
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+    assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())

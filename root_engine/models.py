@@ -82,6 +82,7 @@ class MarquiseState:
     crafting_power: dict[Suit, int] = field(
         default_factory=lambda: {Suit.FOX: 0, Suit.RABBIT: 0, Suit.MOUSE: 0}
     )
+    crafting_window_open: bool = False
 
 
 @dataclass

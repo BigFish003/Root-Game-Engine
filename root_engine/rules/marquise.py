@@ -30,7 +30,10 @@ def valid_actions(state: GameState) -> list:
     ctx = state.decision_context
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]
-        actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE))
+        if state.marquise.crafting_window_open:
+            actions.extend(
+                Craft(card_id) for card_id in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE)
+            )
         if state.marquise.daylight_actions_used >= 3:
             return actions
         if not state.marquise.recruit_used_this_turn:
@@ -63,6 +66,7 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
     state.marquise.warriors_in_supply -= 1
     state.marquise.recruit_used_this_turn = True
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_build(state: GameState, action: Build) -> None:
@@ -87,6 +91,7 @@ def apply_build(state: GameState, action: Build) -> None:
     state.marquise.buildings_in_supply[action.building_type] -= 1
     state.scores[Faction.MARQUISE] += _marquise_build_score(state, action.building_type)
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
@@ -105,6 +110,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_source = None
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
@@ -121,11 +127,14 @@ def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> 
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_battle_clearing = None
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_craft(state: GameState, action: Craft) -> None:
     if state.turn.phase != Phase.DAYLIGHT:
         raise ValueError("Craft can only be taken in Daylight")
+    if not state.marquise.crafting_window_open:
+        raise ValueError("Crafting is only available at the start of Daylight")
     if action.card_id not in state.marquise.hand:
         raise ValueError("Card not in hand")
     if action.card_id not in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE):
