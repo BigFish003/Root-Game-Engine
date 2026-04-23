@@ -4,7 +4,7 @@ from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 class state_renderer:
@@ -49,43 +49,86 @@ class state_renderer:
         state dictionary for easier future rendering development.
         """
 
-        def add_build_spot(clearing):
-            # clearing is (left, top, right, bottom)
-            left, top, right, bottom = clearing
+        def add_build_spots(center: tuple[int, int], slots: int) -> None:
+            cx, cy = center
+            rect_w = 14
+            rect_h = 9
+            spacing = 4
+            total_width = slots * rect_w + (slots - 1) * spacing
+            start_x = cx - total_width / 2
+            y = cy + 20
 
-            # center of the circle
-            cx = (left + right) / 2
-            cy = (top + bottom) / 2
-
-            # size of the small rectangle
-            rect_w = 16
-            rect_h = 10
-
-            # rectangle coordinates
-            rect_left = cx - rect_w / 2
-            rect_top = cy - rect_h / 2
-            rect_right = cx + rect_w / 2
-            rect_bottom = cy + rect_h / 2
-
-            draw.rectangle(
-                (rect_left, rect_top, rect_right, rect_bottom),
-                fill="brown",
-                outline="black",
-                width=2
-            )
+            for slot_index in range(slots):
+                left = start_x + slot_index * (rect_w + spacing)
+                draw.rectangle(
+                    (left, y, left + rect_w, y + rect_h),
+                    fill=(139, 90, 43),
+                    outline="black",
+                    width=1,
+                )
 
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
         draw = ImageDraw.Draw(img)
+        font = ImageFont.load_default()
 
-        #map
+        # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
         draw.text((12, 12), f"State: {state_dictionary['meta']['state_type']}", fill="black")
 
-        clearing1 = (25, 25, 100, 100)
-        draw.ellipse(clearing1, fill="grey", outline="black", width=3)
-        add_build_spot(clearing1)
+        clearing_positions: dict[int, tuple[int, int]] = {
+            1: (75, 75),
+            2: (190, 70),
+            3: (305, 95),
+            4: (85, 180),
+            5: (210, 175),
+            6: (325, 180),
+            7: (105, 285),
+            8: (230, 285),
+            9: (395, 125),
+            10: (495, 120),
+            11: (470, 220),
+            12: (380, 290),
+        }
+        radius = 28
+
+        # Draw paths first so clearings appear on top of paths.
+        drawn_edges: set[tuple[int, int]] = set()
+        clearings = state_dictionary.get("clearings", {})
+        for clearing_id_str, clearing_data in clearings.items():
+            clearing_id = int(clearing_id_str)
+            for adjacent in clearing_data.get("adjacent_clearings", []):
+                edge = tuple(sorted((clearing_id, adjacent)))
+                if edge in drawn_edges:
+                    continue
+                start = clearing_positions.get(edge[0])
+                end = clearing_positions.get(edge[1])
+                if start is None or end is None:
+                    continue
+                draw.line((start, end), fill=(210, 180, 140), width=8)
+                drawn_edges.add(edge)
+
+        # Draw clearing circles, ID labels, and build spots.
+        for clearing_id_str, clearing_data in clearings.items():
+            clearing_id = int(clearing_id_str)
+            center = clearing_positions.get(clearing_id)
+            if center is None:
+                continue
+
+            cx, cy = center
+            circle = (cx - radius, cy - radius, cx + radius, cy + radius)
+            draw.ellipse(circle, fill=(223, 223, 223), outline="black", width=3)
+
+            label = str(clearing_id)
+            label_bbox = draw.textbbox((0, 0), label, font=font)
+            label_w = label_bbox[2] - label_bbox[0]
+            label_h = label_bbox[3] - label_bbox[1]
+            draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
+
+            slots = int(clearing_data.get("building_slots", 0))
+            if slots > 0:
+                add_build_spots(center, slots)
 
         img.save(output_path)
 
