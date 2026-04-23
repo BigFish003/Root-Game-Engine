@@ -49,13 +49,43 @@ class state_renderer:
         state dictionary for easier future rendering development.
         """
 
+        def add_build_spot(clearing):
+            # clearing is (left, top, right, bottom)
+            left, top, right, bottom = clearing
+
+            # center of the circle
+            cx = (left + right) / 2
+            cy = (top + bottom) / 2
+
+            # size of the small rectangle
+            rect_w = 16
+            rect_h = 10
+
+            # rectangle coordinates
+            rect_left = cx - rect_w / 2
+            rect_top = cy - rect_h / 2
+            rect_right = cx + rect_w / 2
+            rect_bottom = cy + rect_h / 2
+
+            draw.rectangle(
+                (rect_left, rect_top, rect_right, rect_bottom),
+                fill="brown",
+                outline="black",
+                width=2
+            )
+
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
         draw = ImageDraw.Draw(img)
 
-        draw.rectangle((0, 0, 550, 350), fill="lightgreen", outline="black", width=3)
+        #map
+        draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
         draw.text((12, 12), f"State: {state_dictionary['meta']['state_type']}", fill="black")
+
+        clearing1 = (25, 25, 100, 100)
+        draw.ellipse(clearing1, fill="grey", outline="black", width=3)
+        add_build_spot(clearing1)
 
         img.save(output_path)
 
