@@ -14,7 +14,7 @@ from ..actions import (
     SelectMoveDestination,
     SelectMoveSource,
 )
-from ..enums import BuildingType, DecisionType, Faction
+from ..enums import BuildingType, DecisionType, Faction, Phase, TokenType
 from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards
@@ -24,10 +24,16 @@ from .movement import legal_move_destinations, legal_move_sources
 def valid_actions(state: GameState) -> list:
     """Return legal next actions for Marquise in current decision context."""
 
+    if state.turn.phase != Phase.DAYLIGHT:
+        return [EndPhase()]
+
     ctx = state.decision_context
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]
-        actions.extend(Recruit(cid) for cid in _legal_recruit_clearings(state))
+        if state.marquise.daylight_actions_used >= 3:
+            return actions
+        if not state.marquise.recruit_used_this_turn:
+            actions.extend(Recruit(cid) for cid in _legal_recruit_clearings(state))
         actions.extend(
             Build(clearing_id=cid, building_type=b)
             for cid, b in _legal_builds(state)
@@ -47,13 +53,23 @@ def valid_actions(state: GameState) -> list:
 
 
 def apply_recruit(state: GameState, action: Recruit) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Recruit can only be taken in Daylight")
+    if state.marquise.recruit_used_this_turn:
+        raise ValueError("Marquise recruit can only be used once per turn")
     if state.marquise.warriors_in_supply <= 0:
         raise ValueError("No Marquise warriors in supply")
     state.board.warriors[action.clearing_id][Faction.MARQUISE] += 1
     state.marquise.warriors_in_supply -= 1
+    state.marquise.recruit_used_this_turn = True
+    state.marquise.daylight_actions_used += 1
 
 
 def apply_build(state: GameState, action: Build) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Build can only be taken in Daylight")
+    if not _marquise_rules_clearing(state, action.clearing_id):
+        raise ValueError("Marquise must rule the clearing to build")
     if state.marquise.buildings_in_supply[action.building_type] <= 0:
         raise ValueError("No building of requested type left")
     if action.building_type not in [BuildingType.SAWMILL, BuildingType.WORKSHOP, BuildingType.RECRUITER]:
@@ -62,9 +78,15 @@ def apply_build(state: GameState, action: Build) -> None:
     slots = state.board.clearings[action.clearing_id].building_slots
     if len(buildings) >= slots:
         raise ValueError("No free building slot")
+    wood_cost = _marquise_build_cost(state, action.building_type)
+    if wood_cost > 0:
+        paid = _pay_wood_cost(state, action.clearing_id, wood_cost)
+        if not paid:
+            raise ValueError("Not enough connected wood to pay build cost")
     buildings.append(action.building_type)
     state.marquise.buildings_in_supply[action.building_type] -= 1
-    state.scores[Faction.MARQUISE] += 1
+    state.scores[Faction.MARQUISE] += _marquise_build_score(state, action.building_type)
+    state.marquise.daylight_actions_used += 1
 
 
 def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
@@ -82,6 +104,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.board.warriors[action.clearing_id][Faction.MARQUISE] += 1
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_source = None
+    state.marquise.daylight_actions_used += 1
 
 
 def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
@@ -97,9 +120,12 @@ def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> 
     resolve_basic_battle(state, Faction.MARQUISE, target, clearing)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_battle_clearing = None
+    state.marquise.daylight_actions_used += 1
 
 
 def apply_craft(state: GameState, action: Craft) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Craft can only be taken in Daylight")
     if action.card_id not in state.marquise.hand:
         raise ValueError("Card not in hand")
     state.marquise.hand.remove(action.card_id)
@@ -123,7 +149,84 @@ def _legal_builds(state: GameState) -> list[tuple[int, BuildingType]]:
         slots = state.board.clearings[cid].building_slots
         if len(existing) >= slots:
             continue
+        if not _marquise_rules_clearing(state, cid):
+            continue
         for btype in [BuildingType.SAWMILL, BuildingType.WORKSHOP, BuildingType.RECRUITER]:
-            if state.marquise.buildings_in_supply[btype] > 0:
+            if (
+                state.marquise.buildings_in_supply[btype] > 0
+                and _has_build_payment(state, cid, _marquise_build_cost(state, btype))
+            ):
                 result.append((cid, btype))
     return result
+
+
+def _marquise_build_cost(state: GameState, building_type: BuildingType) -> int:
+    placed = 6 - state.marquise.buildings_in_supply[building_type]
+    return [0, 1, 2, 3, 3, 4][placed]
+
+
+def _marquise_build_score(state: GameState, building_type: BuildingType) -> int:
+    placed = 6 - state.marquise.buildings_in_supply[building_type]
+    return [0, 1, 2, 3, 4, 5][placed]
+
+
+def _marquise_rules_clearing(state: GameState, clearing_id: int) -> bool:
+    marq_power = (
+        state.board.warriors[clearing_id][Faction.MARQUISE]
+        + len(state.board.buildings[clearing_id][Faction.MARQUISE])
+    )
+    eyrie_power = (
+        state.board.warriors[clearing_id][Faction.EYRIE]
+        + len(state.board.buildings[clearing_id][Faction.EYRIE])
+    )
+    alliance_power = (
+        state.board.warriors[clearing_id][Faction.ALLIANCE]
+        + len(state.board.buildings[clearing_id][Faction.ALLIANCE])
+    )
+    return marq_power > max(eyrie_power, alliance_power)
+
+
+def _reachable_ruled_clearings(state: GameState, origin: int) -> set[int]:
+    if not _marquise_rules_clearing(state, origin):
+        return set()
+    seen = {origin}
+    stack = [origin]
+    while stack:
+        cid = stack.pop()
+        for nxt in state.board.clearings[cid].adjacent_clearings:
+            if nxt in seen:
+                continue
+            if not _marquise_rules_clearing(state, nxt):
+                continue
+            seen.add(nxt)
+            stack.append(nxt)
+    return seen
+
+
+def _wood_count_in_clearing(state: GameState, clearing_id: int) -> int:
+    return sum(1 for token in state.board.tokens[clearing_id][Faction.MARQUISE] if token == TokenType.WOOD)
+
+
+def _has_build_payment(state: GameState, target_clearing: int, cost: int) -> bool:
+    if cost <= 0:
+        return True
+    reachable = _reachable_ruled_clearings(state, target_clearing)
+    available_wood = sum(_wood_count_in_clearing(state, cid) for cid in reachable)
+    return available_wood >= cost
+
+
+def _pay_wood_cost(state: GameState, target_clearing: int, cost: int) -> bool:
+    if cost <= 0:
+        return True
+    reachable = sorted(_reachable_ruled_clearings(state, target_clearing))
+    remaining = cost
+    for cid in reachable:
+        tokens = state.board.tokens[cid][Faction.MARQUISE]
+        wood_indexes = [idx for idx, token in enumerate(tokens) if token == TokenType.WOOD]
+        remove_now = min(len(wood_indexes), remaining)
+        for token_idx in reversed(wood_indexes[:remove_now]):
+            tokens.pop(token_idx)
+        remaining -= remove_now
+        if remaining == 0:
+            return True
+    return False
