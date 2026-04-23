@@ -51,18 +51,21 @@ class state_renderer:
 
         def add_build_spots(center: tuple[int, int], slots: int) -> None:
             cx, cy = center
-            rect_w = 14
-            rect_h = 9
+            square_size = 10
+            half_size = square_size / 2
             spacing = 4
-            total_width = slots * rect_w + (slots - 1) * spacing
-            start_x = cx - total_width / 2
-            y = cy + 20
+            slots_to_draw = min(slots, 3)
+            total_width = slots_to_draw * square_size + (slots_to_draw - 1) * spacing
+            start_x = cx - total_width / 2 + half_size
+            slot_center_y = cy - radius * 0.45
 
-            for slot_index in range(slots):
-                left = start_x + slot_index * (rect_w + spacing)
+            for slot_index in range(slots_to_draw):
+                slot_center_x = start_x + slot_index * (square_size + spacing)
+                left = slot_center_x - half_size
+                top = slot_center_y - half_size
                 draw.rectangle(
-                    (left, y, left + rect_w, y + rect_h),
-                    fill=(139, 90, 43),
+                    (left, top, left + square_size, top + square_size),
+                    fill=None,
                     outline="black",
                     width=1,
                 )
@@ -90,7 +93,7 @@ class state_renderer:
             11: (330, 270),
             12: (480, 300),
         }
-        radius = 28
+        radius = 35
 
         # Draw paths first so clearings appear on top of paths.
         drawn_edges: set[tuple[int, int]] = set()
@@ -126,7 +129,6 @@ class state_renderer:
             draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
 
             slots = int(clearing_data.get("building_slots", 0))
-            print(slots)
             if slots > 0:
                 add_build_spots(center, slots)
 
