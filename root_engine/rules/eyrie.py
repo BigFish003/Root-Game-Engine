@@ -31,7 +31,7 @@ def valid_actions(state: GameState) -> list:
         actions.extend(Build(clearing_id=cid, building_type=BuildingType.ROOST) for cid in _legal_roost_builds(state))
         actions.extend(SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.EYRIE))
         actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.EYRIE))
-        actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.eyrie.hand))
+        actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE))
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
         return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
