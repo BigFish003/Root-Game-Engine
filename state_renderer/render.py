@@ -8,23 +8,43 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class state_renderer:
-
-
     """Helpers for rendering and inspecting Root game states."""
+
     def render_board(self, observation: Any, output_path: str) -> None:
-        """Render the game board as an image.
+        """Render the game board as an image."""
 
-        The renderer currently draws a placeholder board and creates a
-        state dictionary for easier future rendering development.
-        """
+        def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+            candidates = ["DejaVuSans-Bold.ttf", "Arial Bold.ttf"] if bold else ["DejaVuSans.ttf", "Arial.ttf"]
+            for font_name in candidates:
+                try:
+                    return ImageFont.truetype(font_name, size=size)
+                except OSError:
+                    continue
+            return ImageFont.load_default()
 
-        def make_marquise_piece(x, y):
+        def make_marquise_piece(x: int, y: int) -> None:
             width, height, orange = 18, 30, (255, 128, 0)
             ear_base_y = y + height // 3
             draw.rectangle((x, ear_base_y, x + width, y + height), fill=orange)
             draw.polygon([(x + width // 3, y), (x, ear_base_y), (x + width // 2, ear_base_y)], fill=orange)
-            draw.polygon([(x + 2 * width // 3, y), (x + width // 2, ear_base_y), (x + width, ear_base_y)], fill=orange)
-            draw.line([(x, y + height), (x, ear_base_y), (x + width // 3, y), (x + width // 2, ear_base_y),(x + 2 * width // 3, y), (x + width, ear_base_y), (x + width, y + height), (x, y + height)], fill="black", width=1)
+            draw.polygon(
+                [(x + 2 * width // 3, y), (x + width // 2, ear_base_y), (x + width, ear_base_y)],
+                fill=orange,
+            )
+            draw.line(
+                [
+                    (x, y + height),
+                    (x, ear_base_y),
+                    (x + width // 3, y),
+                    (x + width // 2, ear_base_y),
+                    (x + 2 * width // 3, y),
+                    (x + width, ear_base_y),
+                    (x + width, y + height),
+                    (x, y + height),
+                ],
+                fill="black",
+                width=1,
+            )
             r, eye_y = 1, y + height * 0.57
             for ex in (x + width * 0.35, x + width * 0.65):
                 draw.ellipse((ex - r, eye_y - r, ex + r, eye_y + r), fill="black")
@@ -43,85 +63,215 @@ class state_renderer:
                 slot_center_x = start_x + slot_index * (square_size + spacing)
                 left = slot_center_x - half_size
                 top = slot_center_y - half_size
-                draw.rectangle(
-                    (left, top, left + square_size, top + square_size),
-                    fill=None,
-                    outline="black",
-                    width=1,
-                )
+                draw.rectangle((left, top, left + square_size, top + square_size), fill=None, outline="black", width=1)
 
-        def add_marquise_supply_tiles(inner_rect: tuple[int, int, int, int]) -> None:
-            left, top, right, bottom = inner_rect
+        def draw_supply_row(
+            y_center: int,
+            start_x: int,
+            slots_per_row: int,
+            slot_size: int,
+            slot_spacing: int,
+            remaining: int,
+            piece_image: Image.Image,
+        ) -> None:
+            tile_y = y_center - slot_size // 2
+            remaining = max(0, min(remaining, slots_per_row))
+            first_filled_slot = slots_per_row - remaining
+
+            for slot_idx in range(slots_per_row):
+                tile_x = start_x + slot_idx * (slot_size + slot_spacing)
+                draw.rectangle((tile_x, tile_y, tile_x + slot_size, tile_y + slot_size), fill=None, outline="black", width=1)
+                if slot_idx >= first_filled_slot:
+                    piece_x = tile_x + (slot_size - piece_image.width) // 2
+                    piece_y = tile_y + (slot_size - piece_image.height) // 2
+                    img.paste(piece_image, (piece_x, piece_y), piece_image)
+
+        def draw_faction_header(board_rect: tuple[int, int, int, int], title: str, bg_color: tuple[int, int, int]) -> None:
+            left, top, right, _ = board_rect
+            draw.rectangle((left, top, right, top + 34), fill=bg_color, outline="black", width=2)
+            draw.text((left + 8, top + 8), title, fill="white", font=font_bold)
+
+        def draw_faction_counts(board_rect: tuple[int, int, int, int], reserve: int, crafted: int) -> int:
+            left, top, _, _ = board_rect
+            text_y = top + 40
+            draw.text((left + 8, text_y), f"Reserve: {reserve}", fill="black", font=font)
+            draw.text((left + 8, text_y + 16), f"Crafted items: {crafted}", fill="black", font=font)
+            return text_y + 38
+
+        def normalize_suit_symbol(value: Any) -> str:
+            v = str(value).lower()
+            if v.endswith("fox") or v == "fox":
+                return "fox"
+            if v.endswith("rabbit") or v == "rabbit":
+                return "rabbit"
+            if v.endswith("mouse") or v == "mouse":
+                return "mouse"
+            return "bird"
+
+        def suit_symbol_from_card_id(card_id: Any) -> str:
+            if isinstance(card_id, int):
+                raw_cards = state_dictionary.get("raw", {}).get("cards", {})
+                card = raw_cards.get(str(card_id), {})
+                return normalize_suit_symbol(card.get("suit", "bird"))
+            return normalize_suit_symbol(card_id)
+
+        def draw_suit_icon(symbol: str, x: int, y: int) -> None:
+            if symbol == "fox":
+                img.paste(Fox, (x, y), Fox)
+            elif symbol == "rabbit":
+                img.paste(Rabbit, (x, y), Rabbit)
+            elif symbol == "mouse":
+                img.paste(Mouse, (x, y), Mouse)
+            else:
+                draw.ellipse((x, y, x + 8, y + 8), fill=(245, 245, 100), outline="black", width=1)
+                draw.text((x + 2, y - 1), "B", fill="black", font=small_font)
+
+        def draw_marquise_board(board_rect: tuple[int, int, int, int]) -> None:
+            draw_faction_header(board_rect, "Marquise de Cat", (168, 98, 24))
             faction_data = state_dictionary.get("factions", {}).get("marquise", {}).get("public_data", {})
+            draw_faction_counts(
+                board_rect,
+                int(faction_data.get("warriors_in_supply", 0)),
+                len(state_dictionary.get("factions", {}).get("marquise", {}).get("crafted_effects", [])),
+            )
+
+            left, _, right, bottom = board_rect
+            inner_rect = (left + 10, bottom - 132, right - 10, bottom - 10)
+            draw.rectangle(inner_rect, fill=(223, 194, 134), outline="black", width=3)
+
             buildings = faction_data.get("buildings_in_supply", {})
             rows = [
-                ("Workshop", int(buildings.get("workshop", 0)), Workshop),
-                ("Sawmill", int(buildings.get("sawmill", 0)), Sawmill),
-                ("Recruiter", int(buildings.get("recruiter", 0)), Recruiter),
+                (int(buildings.get("workshop", 0)), Workshop),
+                (int(buildings.get("sawmill", 0)), Sawmill),
+                (int(buildings.get("recruiter", 0)), Recruiter),
             ]
-
-            row_height = (bottom - top) // len(rows)
-            slot_size = 18
-            slot_spacing = 4
-            slots_per_row = 6
+            row_height = (inner_rect[3] - inner_rect[1]) // len(rows)
+            slot_size, slot_spacing, slots_per_row = 18, 4, 6
             slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
-            slots_start_x = right - 8 - slots_width
+            slots_start_x = right - 18 - slots_width
 
-            for idx, (label, remaining, piece_image) in enumerate(rows):
-                row_top = top + idx * row_height
-                row_center_y = row_top + row_height // 2
-                draw.text((left + 8, row_center_y - 6), label, fill="black", font=font)
+            for idx, (remaining, piece_image) in enumerate(rows):
+                row_center_y = inner_rect[1] + idx * row_height + row_height // 2
+                draw_supply_row(row_center_y, slots_start_x, slots_per_row, slot_size, slot_spacing, remaining, piece_image)
 
-                tile_y = row_center_y - slot_size // 2
-                for slot_idx in range(slots_per_row):
-                    tile_x = slots_start_x + slot_idx * (slot_size + slot_spacing)
-                    draw.rectangle(
-                        (tile_x, tile_y, tile_x + slot_size, tile_y + slot_size),
-                        fill=None,
-                        outline="black",
-                        width=1,
-                    )
-                    if slot_idx < remaining:
-                        piece_x = tile_x + (slot_size - piece_image.width) // 2
-                        piece_y = tile_y + (slot_size - piece_image.height) // 2
-                        img.paste(piece_image, (piece_x, piece_y), piece_image)
+        def draw_eyrie_board(board_rect: tuple[int, int, int, int]) -> None:
+            draw_faction_header(board_rect, "Eyrie Dynasties", (40, 86, 132))
+            faction = state_dictionary.get("factions", {}).get("eyrie", {})
+            public_data = faction.get("public_data", {})
+            cursor_y = draw_faction_counts(
+                board_rect,
+                int(public_data.get("warriors_in_supply", 0)),
+                len(faction.get("crafted_effects", [])),
+            )
+
+            leader = str(public_data.get("leader", "")).capitalize()
+            draw.text((board_rect[0] + 8, cursor_y), f"Leader: {leader}", fill="black", font=font)
+            cursor_y += 18
+
+            decree = public_data.get("decree", {})
+            decree_rect = (board_rect[0] + 8, cursor_y, board_rect[2] - 8, cursor_y + 88)
+            draw.rectangle(decree_rect, fill=(198, 218, 237), outline="black", width=2)
+            categories = ["recruit", "move", "battle", "build"]
+            section_w = (decree_rect[2] - decree_rect[0]) // 4
+            for idx, category in enumerate(categories):
+                sec_left = decree_rect[0] + idx * section_w
+                sec_right = sec_left + section_w
+                draw.line((sec_left, decree_rect[1], sec_left, decree_rect[3]), fill="black", width=1)
+                draw.text((sec_left + 3, decree_rect[1] + 3), category.capitalize(), fill="black", font=small_font)
+                symbols = [suit_symbol_from_card_id(v) for v in decree.get(category, [])]
+                for s_idx, symbol in enumerate(symbols):
+                    x = sec_left + 4 + (s_idx % 3) * 10
+                    y = decree_rect[1] + 16 + (s_idx // 3) * 10
+                    if y + 8 < decree_rect[3] - 2:
+                        draw_suit_icon(symbol, x, y)
+            draw.line((decree_rect[2], decree_rect[1], decree_rect[2], decree_rect[3]), fill="black", width=1)
+
+            inner_rect = (board_rect[0] + 10, board_rect[3] - 58, board_rect[2] - 10, board_rect[3] - 10)
+            draw.rectangle(inner_rect, fill=(182, 205, 227), outline="black", width=3)
+            slots_per_row, slot_size, slot_spacing = 6, 18, 4
+            slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
+            slots_start_x = board_rect[2] - 18 - slots_width
+            row_center_y = (inner_rect[1] + inner_rect[3]) // 2
+            roosts_remaining = int(public_data.get("roosts_in_supply", 0))
+            draw_supply_row(row_center_y, slots_start_x, slots_per_row, slot_size, slot_spacing, roosts_remaining, Roost)
+
+        def draw_alliance_board(board_rect: tuple[int, int, int, int]) -> None:
+            draw_faction_header(board_rect, "Woodland Alliance", (35, 80, 31))
+            faction = state_dictionary.get("factions", {}).get("alliance", {})
+            public_data = faction.get("public_data", {})
+            cursor_y = draw_faction_counts(
+                board_rect,
+                int(public_data.get("warriors_in_supply", 0)),
+                len(faction.get("crafted_effects", [])),
+            )
+
+            officers = int(public_data.get("officers", 0))
+            officer_rect = (board_rect[0] + 8, cursor_y, board_rect[2] - 42, cursor_y + 32)
+            draw.rectangle(officer_rect, fill=(120, 152, 100), outline="black", width=2)
+            draw.text((officer_rect[0] + 4, officer_rect[1] + 4), "Officers", fill="white", font=small_font)
+            for idx in range(officers):
+                ox = officer_rect[0] + 6 + (idx % 8) * 10
+                oy = officer_rect[1] + 16 + (idx // 8) * 10
+                draw.ellipse((ox, oy, ox + 7, oy + 7), fill=(230, 230, 230), outline="black", width=1)
+
+            sympathy_slots = 9
+            sympathy_remaining = int(public_data.get("sympathy_in_supply", 0))
+            track_x = board_rect[2] - 28
+            track_start_y = cursor_y
+            for slot_idx in range(sympathy_slots):
+                slot_top = track_start_y + slot_idx * 17
+                draw.rectangle((track_x, slot_top, track_x + 18, slot_top + 15), outline="black", width=1)
+                if slot_idx >= sympathy_slots - min(sympathy_remaining, sympathy_slots):
+                    px = track_x + (18 - Sympathy.width) // 2
+                    py = slot_top + (15 - Sympathy.height) // 2
+                    img.paste(Sympathy, (px, py), Sympathy)
+
+            inner_rect = (board_rect[0] + 10, board_rect[3] - 58, board_rect[2] - 34, board_rect[3] - 10)
+            draw.rectangle(inner_rect, fill=(137, 166, 114), outline="black", width=3)
+            slots_per_row, slot_size, slot_spacing = 3, 18, 8
+            slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
+            slots_start_x = inner_rect[0] + ((inner_rect[2] - inner_rect[0]) - slots_width) // 2
+            row_center_y = (inner_rect[1] + inner_rect[3]) // 2
+            bases = public_data.get("bases_in_supply", {})
+            remaining = [
+                1 if bases.get("mouse", False) else 0,
+                1 if bases.get("fox", False) else 0,
+                1 if bases.get("rabbit", False) else 0,
+            ]
+            for idx, (count, piece_image) in enumerate(zip(remaining, [Mouse_base, Fox_base, Rabbit_base])):
+                x = slots_start_x + idx * (slot_size + slot_spacing)
+                draw.rectangle((x, row_center_y - 9, x + slot_size, row_center_y + 9), outline="black", width=1)
+                if count == 1:
+                    px = x + (slot_size - piece_image.width) // 2
+                    py = row_center_y - 9 + (slot_size - piece_image.height) // 2
+                    img.paste(piece_image, (px, py), piece_image)
+
+        def draw_vagabond_board(board_rect: tuple[int, int, int, int]) -> None:
+            draw_faction_header(board_rect, "Vagabond", (85, 85, 85))
+            faction = state_dictionary.get("factions", {}).get("vagabond", {})
+            draw_faction_counts(board_rect, 0, len(faction.get("crafted_effects", [])))
 
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
         draw = ImageDraw.Draw(img)
-        font = ImageFont.load_default()
+        font = load_font(12)
+        small_font = load_font(10)
+        font_bold = load_font(14, bold=True)
 
-        #building images ex: img.paste(Workshop, (50, 50), Workshop)
-        Workshop = Image.open("state_renderer/images/anvil_piece.png").convert("RGBA")
-        Workshop = Workshop.resize((16, 16))
-        Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA")
-        Sawmill = Sawmill.resize((16, 16))
-        Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
-        Recruiter = Recruiter.resize((16, 16))
-        Roost = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
-        Roost = Roost.resize((16, 16))
-        Mouse_base = Image.open("state_renderer/images/Mouse_base.webp").convert("RGBA")
-        Mouse_base = Mouse_base.resize((16, 16))
-        Fox_base = Image.open("state_renderer/images/Fox_base.webp").convert("RGBA")
-        Fox_base = Fox_base.resize((16, 16))
-        Rabbit_base = Image.open("state_renderer/images/Rabbit_base.webp").convert("RGBA")
-        Rabbit_base = Rabbit_base.resize((16, 16))
+        Workshop = Image.open("state_renderer/images/anvil_piece.png").convert("RGBA").resize((16, 16))
+        Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA").resize((16, 16))
+        Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA").resize((16, 16))
+        Roost = Image.open("state_renderer/images/Roost.webp").convert("RGBA").resize((16, 16))
+        Mouse_base = Image.open("state_renderer/images/Mouse_base.webp").convert("RGBA").resize((16, 16))
+        Fox_base = Image.open("state_renderer/images/Fox_base.webp").convert("RGBA").resize((16, 16))
+        Rabbit_base = Image.open("state_renderer/images/Rabbit_base.webp").convert("RGBA").resize((16, 16))
+        Sympathy = Image.open("state_renderer/images/Sympathy.webp").convert("RGBA").resize((16, 16))
 
-        #piece images
-        Wood = Image.open("state_renderer/images/Wood.webp").convert("RGBA")
-        Wood = Wood.resize((16, 16))
-        Sympathy = Image.open("state_renderer/images/Sympathy.webp").convert("RGBA")
-        Sympathy = Sympathy.resize((16, 16))
+        Fox = Image.open("state_renderer/images/Fox.png").convert("RGBA").resize((8, 8))
+        Rabbit = Image.open("state_renderer/images/Rabbit.png").convert("RGBA").resize((8, 8))
+        Mouse = Image.open("state_renderer/images/Mouse.png").convert("RGBA").resize((8, 8))
 
-        #other symbols
-        Fox = Image.open("state_renderer/images/Fox.png").convert("RGBA")
-        Fox = Fox.resize((8, 8))
-        Rabbit = Image.open("state_renderer/images/Rabbit.png").convert("RGBA")
-        Rabbit = Rabbit.resize((8, 8))
-        Mouse = Image.open("state_renderer/images/Mouse.png").convert("RGBA")
-        Mouse = Mouse.resize((8, 8))
-        # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
 
         clearing_positions: dict[int, tuple[int, int]] = {
@@ -140,7 +290,6 @@ class state_renderer:
         }
         radius = 45
 
-        # Draw paths first so clearings appear on top of paths.
         drawn_edges: set[tuple[int, int]] = set()
         clearings = state_dictionary.get("clearings", {})
         for clearing_id_str, clearing_data in clearings.items():
@@ -156,7 +305,6 @@ class state_renderer:
                 draw.line((start, end), fill=(210, 180, 140), width=8)
                 drawn_edges.add(edge)
 
-        # Draw clearing circles, ID labels, and build spots.
         for clearing_id_str, clearing_data in clearings.items():
             clearing_id = int(clearing_id_str)
             center = clearing_positions.get(clearing_id)
@@ -177,31 +325,25 @@ class state_renderer:
             if slots > 0:
                 add_build_spots(center, slots)
 
-        #faction boards
-        #marquise
-        draw.rectangle((0,350,200,600), fill=(229,182,88), outline="black", width=3)
-        marquise_inner_rect = (10, 450, 190, 590)
-        draw.rectangle(marquise_inner_rect, fill=(223, 194, 134), outline="black", width=3)
-        add_marquise_supply_tiles(marquise_inner_rect)
+        marquise_rect = (0, 350, 200, 600)
+        eyrie_rect = (200, 350, 400, 600)
+        alliance_rect = (400, 350, 600, 600)
+        vagabond_rect = (600, 350, 800, 600)
 
-        #eryie
-        draw.rectangle((200,350,400,600), fill=(46,117,179), outline="black", width=3)
+        draw.rectangle(marquise_rect, fill=(229, 182, 88), outline="black", width=3)
+        draw.rectangle(eyrie_rect, fill=(46, 117, 179), outline="black", width=3)
+        draw.rectangle(alliance_rect, fill=(53, 101, 40), outline="black", width=3)
+        draw.rectangle(vagabond_rect, fill=(111, 111, 111), outline="black", width=3)
 
-        #woodland
-        draw.rectangle((400,350,600,600), fill=(53,101,40), outline="black", width=3)
-
-        #vagabound
-        draw.rectangle((600,350,800,600), fill=(111,111,111), outline="black", width=3)
-
+        draw_marquise_board(marquise_rect)
+        draw_eyrie_board(eyrie_rect)
+        draw_alliance_board(alliance_rect)
+        draw_vagabond_board(vagabond_rect)
 
         img.save(output_path)
 
     def build_state_dictionary(self, state: Any) -> dict[str, Any]:
-        """Return an easy-to-read dictionary from a state/observation object.
-
-        The output is intended for renderer development and keeps a stable,
-        understandable top-level structure while preserving all nested data.
-        """
+        """Return an easy-to-read dictionary from a state/observation object."""
 
         raw = self._normalize_value(state)
 
@@ -227,7 +369,6 @@ class state_renderer:
             },
             "raw": raw,
         }
-
 
     def _normalize_value(self, value: Any) -> Any:
         """Recursively convert dataclasses/enums to Python primitives."""
