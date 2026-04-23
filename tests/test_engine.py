@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from root_engine.actions import Build, EndPhase, Recruit, SelectMoveDestination, SelectMoveSource
+from root_engine.actions import Build, Craft, EndPhase, Recruit, SelectMoveDestination, SelectMoveSource
 from root_engine.engine import RootEngine
-from root_engine.enums import BuildingType, DecisionType, Faction, Phase
+from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit
 
 
 def test_reset_initial_state_has_expected_markers() -> None:
@@ -14,7 +14,7 @@ def test_reset_initial_state_has_expected_markers() -> None:
     assert state.turn.current_faction == Faction.MARQUISE
     assert state.turn.phase == Phase.BIRDSONG
     assert state.marquise.keep_clearing == 1
-    assert state.board.warriors[11][Faction.EYRIE] == 6
+    assert state.board.warriors[12][Faction.EYRIE] == 6
 
 
 def test_valid_actions_non_empty_for_start_state() -> None:
@@ -122,3 +122,65 @@ def test_marquise_recruit_is_once_per_turn() -> None:
     recruit = next(a for a in engine.get_valid_actions() if isinstance(a, Recruit))
     engine.apply_action(recruit)
     assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
+
+
+def test_base_deck_contains_expected_card_count() -> None:
+    engine = RootEngine(seed=21)
+    assert len(engine.get_state().cards) == 53
+
+
+def test_marquise_can_craft_multiple_cards_with_workshop_budget() -> None:
+    engine = RootEngine(seed=23)
+    state = engine.get_state()
+    state.board.buildings[1][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # fox
+    state.board.buildings[3][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # mouse
+    state.board.buildings[5][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # rabbit
+
+    tax_collector = next(
+        cid
+        for cid, card in state.cards.items()
+        if card.name == "Tax Collector" and card.suit.value == "fox"
+    )
+    visit_friends = next(
+        cid
+        for cid, card in state.cards.items()
+        if card.name == "A Visit to Friends" and card.suit.value == "rabbit"
+    )
+    state.marquise.hand = [tax_collector, visit_friends]
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight, initializes crafting power
+
+    first_craft = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, Craft) and action.card_id == tax_collector
+    )
+    engine.apply_action(first_craft)
+    assert state.marquise.crafting_power == {
+        Suit.FOX: 0,
+        Suit.RABBIT: 1,
+        Suit.MOUSE: 0,
+    }
+
+    second_craft = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, Craft) and action.card_id == visit_friends
+    )
+    engine.apply_action(second_craft)
+    assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())
+
+
+def test_marquise_crafting_only_offered_before_non_craft_daylight_action() -> None:
+    engine = RootEngine(seed=29)
+    state = engine.get_state()
+    state.board.buildings[1][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # fox workshop
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.marquise.hand = [anvil]
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
+
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+    assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())

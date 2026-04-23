@@ -14,10 +14,10 @@ from ..actions import (
     SelectMoveDestination,
     SelectMoveSource,
 )
-from ..enums import BuildingType, DecisionType, Faction, Phase, TokenType
+from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
-from .crafting import legal_craft_cards
+from .crafting import legal_craft_cards, spend_marquise_crafting_power
 from .movement import legal_move_destinations, legal_move_sources
 
 
@@ -30,6 +30,10 @@ def valid_actions(state: GameState) -> list:
     ctx = state.decision_context
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]
+        if state.marquise.crafting_window_open:
+            actions.extend(
+                Craft(card_id) for card_id in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE)
+            )
         if state.marquise.daylight_actions_used >= 3:
             return actions
         if not state.marquise.recruit_used_this_turn:
@@ -40,7 +44,6 @@ def valid_actions(state: GameState) -> list:
         )
         actions.extend(SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE))
         actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.MARQUISE))
-        actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.marquise.hand))
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
         return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
@@ -63,6 +66,7 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
     state.marquise.warriors_in_supply -= 1
     state.marquise.recruit_used_this_turn = True
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_build(state: GameState, action: Build) -> None:
@@ -87,6 +91,7 @@ def apply_build(state: GameState, action: Build) -> None:
     state.marquise.buildings_in_supply[action.building_type] -= 1
     state.scores[Faction.MARQUISE] += _marquise_build_score(state, action.building_type)
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
@@ -105,6 +110,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_source = None
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
@@ -121,15 +127,42 @@ def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> 
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_battle_clearing = None
     state.marquise.daylight_actions_used += 1
+    state.marquise.crafting_window_open = False
 
 
 def apply_craft(state: GameState, action: Craft) -> None:
     if state.turn.phase != Phase.DAYLIGHT:
         raise ValueError("Craft can only be taken in Daylight")
+    if not state.marquise.crafting_window_open:
+        raise ValueError("Crafting is only available at the start of Daylight")
     if action.card_id not in state.marquise.hand:
         raise ValueError("Card not in hand")
+    if action.card_id not in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE):
+        raise ValueError("Card cannot be crafted with available workshops")
+    spend_marquise_crafting_power(state, action.card_id)
+    card = state.cards[action.card_id]
     state.marquise.hand.remove(action.card_id)
-    state.discard_pile.append(action.card_id)
+    if card.vp_on_craft > 0:
+        state.scores[Faction.MARQUISE] += card.vp_on_craft
+    if card.name.startswith("Favor of the"):
+        _resolve_favor(state, card.suit)
+    if CardTag.PERSISTENT_EFFECT in card.tags:
+        state.marquise.crafted_effects.append(card.name)
+    else:
+        state.discard_pile.append(action.card_id)
+
+
+def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
+    for cid, clearing in state.board.clearings.items():
+        if clearing.suit != favor_suit:
+            continue
+        state.board.warriors[cid][Faction.EYRIE] = 0
+        state.board.warriors[cid][Faction.ALLIANCE] = 0
+        state.board.buildings[cid][Faction.EYRIE].clear()
+        state.board.buildings[cid][Faction.ALLIANCE].clear()
+        state.board.tokens[cid][Faction.ALLIANCE] = [
+            token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+        ]
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
