@@ -55,9 +55,9 @@ class state_renderer:
             faction_data = state_dictionary.get("factions", {}).get("marquise", {}).get("public_data", {})
             buildings = faction_data.get("buildings_in_supply", {})
             rows = [
-                ("Workshop", int(buildings.get("workshop", 0)), Workshop),
-                ("Sawmill", int(buildings.get("sawmill", 0)), Sawmill),
-                ("Recruiter", int(buildings.get("recruiter", 0)), Recruiter),
+                ("Workshop", int(buildings.get("workshop", 0))),
+                ("Sawmill", int(buildings.get("sawmill", 0))),
+                ("Recruiter", int(buildings.get("recruiter", 0))),
             ]
 
             row_height = (bottom - top) // len(rows)
@@ -67,7 +67,7 @@ class state_renderer:
             slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
             slots_start_x = right - 8 - slots_width
 
-            for idx, (label, remaining, piece_image) in enumerate(rows):
+            for idx, (label, remaining) in enumerate(rows):
                 row_top = top + idx * row_height
                 row_center_y = row_top + row_height // 2
                 draw.text((left + 8, row_center_y - 6), label, fill="black", font=font)
@@ -82,9 +82,12 @@ class state_renderer:
                         width=1,
                     )
                     if slot_idx < remaining:
-                        piece_x = tile_x + (slot_size - piece_image.width) // 2
-                        piece_y = tile_y + (slot_size - piece_image.height) // 2
-                        img.paste(piece_image, (piece_x, piece_y), piece_image)
+                        draw.ellipse((tile_x + 4, tile_y + 4, tile_x + 14, tile_y + 14), fill="black")
+
+        def draw_reserve_label(left: int, top: int, faction_key: str) -> None:
+            public_data = state_dictionary.get("factions", {}).get(faction_key, {}).get("public_data", {})
+            reserve = public_data.get("warriors_in_supply", "n/a")
+            draw.text((left + 8, top + 8), f"Warriors reserve: {reserve}", fill="black", font=font)
 
         state_dictionary = self.build_state_dictionary(observation)
 
@@ -92,35 +95,6 @@ class state_renderer:
         draw = ImageDraw.Draw(img)
         font = ImageFont.load_default()
 
-        #building images ex: img.paste(Workshop, (50, 50), Workshop)
-        Workshop = Image.open("state_renderer/images/anvil_piece.png").convert("RGBA")
-        Workshop = Workshop.resize((16, 16))
-        Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA")
-        Sawmill = Sawmill.resize((16, 16))
-        Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
-        Recruiter = Recruiter.resize((16, 16))
-        Roost = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
-        Roost = Roost.resize((16, 16))
-        Mouse_base = Image.open("state_renderer/images/Mouse_base.webp").convert("RGBA")
-        Mouse_base = Mouse_base.resize((16, 16))
-        Fox_base = Image.open("state_renderer/images/Fox_base.webp").convert("RGBA")
-        Fox_base = Fox_base.resize((16, 16))
-        Rabbit_base = Image.open("state_renderer/images/Rabbit_base.webp").convert("RGBA")
-        Rabbit_base = Rabbit_base.resize((16, 16))
-
-        #piece images
-        Wood = Image.open("state_renderer/images/Wood.webp").convert("RGBA")
-        Wood = Wood.resize((16, 16))
-        Sympathy = Image.open("state_renderer/images/Sympathy.webp").convert("RGBA")
-        Sympathy = Sympathy.resize((16, 16))
-
-        #other symbols
-        Fox = Image.open("state_renderer/images/Fox.png").convert("RGBA")
-        Fox = Fox.resize((8, 8))
-        Rabbit = Image.open("state_renderer/images/Rabbit.png").convert("RGBA")
-        Rabbit = Rabbit.resize((8, 8))
-        Mouse = Image.open("state_renderer/images/Mouse.png").convert("RGBA")
-        Mouse = Mouse.resize((8, 8))
         # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
 
@@ -180,18 +154,49 @@ class state_renderer:
         #faction boards
         #marquise
         draw.rectangle((0,350,200,600), fill=(229,182,88), outline="black", width=3)
+        draw.text((8, 354), "Marquise", fill="black", font=font)
+        draw_reserve_label(0, 350, "marquise")
         marquise_inner_rect = (10, 450, 190, 590)
         draw.rectangle(marquise_inner_rect, fill=(223, 194, 134), outline="black", width=3)
+        draw.text((16, 432), "Buildings on board", fill="black", font=font)
         add_marquise_supply_tiles(marquise_inner_rect)
 
         #eryie
         draw.rectangle((200,350,400,600), fill=(46,117,179), outline="black", width=3)
+        draw.text((208, 354), "Eyrie", fill="white", font=font)
+        draw_reserve_label(200, 350, "eyrie")
+        eyrie_public = state_dictionary.get("factions", {}).get("eyrie", {}).get("public_data", {})
+        draw.text((208, 378), f"Roosts on board: {eyrie_public.get('roosts_in_supply', 0)} / 6", fill="white", font=font)
+        draw.text((208, 396), f"Leader: {eyrie_public.get('leader', 'Unknown')}", fill="white", font=font)
+        draw.text((208, 414), "Decree", fill="white", font=font)
+        decree = eyrie_public.get("decree_suits", {})
+        for idx, section in enumerate(["recruit", "move", "battle", "build"]):
+            suits = decree.get(section, [])
+            suit_text = ", ".join(suits) if suits else "-"
+            draw.text((208, 430 + idx * 16), f"{section.title()}: {suit_text}", fill="white", font=font)
 
         #woodland
         draw.rectangle((400,350,600,600), fill=(53,101,40), outline="black", width=3)
+        draw.text((408, 354), "Woodland Alliance", fill="white", font=font)
+        draw_reserve_label(400, 350, "alliance")
+        alliance_public = state_dictionary.get("factions", {}).get("alliance", {}).get("public_data", {})
+        bases_in_supply = alliance_public.get("bases_in_supply", {})
+        draw.text(
+            (408, 378),
+            f"Bases on board: M:{int(bool(bases_in_supply.get('mouse', False)))} "
+            f"R:{int(bool(bases_in_supply.get('rabbit', False)))} "
+            f"F:{int(bool(bases_in_supply.get('fox', False)))}",
+            fill="white",
+            font=font,
+        )
+        sympathy = alliance_public.get("sympathy_in_supply", 0)
+        draw.text((408, 396), f"Sympathy track: {sympathy} / 9", fill="white", font=font)
+        draw.text((408, 414), f"Officer box: {alliance_public.get('officers', 0)}", fill="white", font=font)
 
         #vagabound
         draw.rectangle((600,350,800,600), fill=(111,111,111), outline="black", width=3)
+        draw.text((608, 354), "Vagabond", fill="black", font=font)
+        draw_reserve_label(600, 350, "vagabond")
 
 
         img.save(output_path)
