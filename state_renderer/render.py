@@ -92,14 +92,35 @@ class state_renderer:
         draw = ImageDraw.Draw(img)
         font = ImageFont.load_default()
 
-        #piece images ex: img.paste(Workshop, (50, 50), Workshop)
+        #building images ex: img.paste(Workshop, (50, 50), Workshop)
         Workshop = Image.open("state_renderer/images/anvil_piece.png").convert("RGBA")
         Workshop = Workshop.resize((16, 16))
         Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA")
         Sawmill = Sawmill.resize((16, 16))
         Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
         Recruiter = Recruiter.resize((16, 16))
+        Roost = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
+        Roost = Roost.resize((16, 16))
+        Mouse_base = Image.open("state_renderer/images/Mouse_base.webp").convert("RGBA")
+        Mouse_base = Mouse_base.resize((16, 16))
+        Fox_base = Image.open("state_renderer/images/Fox_base.webp").convert("RGBA")
+        Fox_base = Fox_base.resize((16, 16))
+        Rabbit_base = Image.open("state_renderer/images/Rabbit_base.webp").convert("RGBA")
+        Rabbit_base = Rabbit_base.resize((16, 16))
 
+        #piece images
+        Wood = Image.open("state_renderer/images/Wood.webp").convert("RGBA")
+        Wood = Wood.resize((16, 16))
+        Sympathy = Image.open("state_renderer/images/Sympathy.webp").convert("RGBA")
+        Sympathy = Sympathy.resize((16, 16))
+
+        #other symbols
+        Fox = Image.open("state_renderer/images/Fox.png").convert("RGBA")
+        Fox = Fox.resize((8, 8))
+        Rabbit = Image.open("state_renderer/images/Rabbit.png").convert("RGBA")
+        Rabbit = Rabbit.resize((8, 8))
+        Mouse = Image.open("state_renderer/images/Mouse.png").convert("RGBA")
+        Mouse = Mouse.resize((8, 8))
         # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
 
