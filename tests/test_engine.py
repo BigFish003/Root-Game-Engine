@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from root_engine.actions import Build, Craft, EndPhase, Recruit, SelectMoveDestination, SelectMoveSource
+from root_engine.actions import (
+    AddToDecree,
+    Build,
+    Craft,
+    EndPhase,
+    FallIntoTurmoil,
+    Recruit,
+    SelectMoveDestination,
+    SelectMoveSource,
+)
 from root_engine.engine import RootEngine
 from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit
 
@@ -184,3 +193,68 @@ def test_marquise_crafting_only_offered_before_non_craft_daylight_action() -> No
     recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
     engine.apply_action(recruit)
     assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())
+
+
+def test_eyrie_birdsong_can_add_cards_to_decree() -> None:
+    engine = RootEngine(seed=31)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+
+    state = engine.get_state()
+    card_id = state.eyrie.hand[0]
+    add = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, AddToDecree) and action.card_id == card_id and action.column == "recruit"
+    )
+    engine.apply_action(add)
+    assert card_id in state.eyrie.decree["recruit"]
+    assert card_id not in state.eyrie.hand
+
+
+def test_eyrie_daylight_craft_before_resolving_decree() -> None:
+    engine = RootEngine(seed=37)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.eyrie.hand = [anvil]
+    state.eyrie.decree["recruit"] = [anvil]
+    state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)  # fox roost for crafting
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
+    engine.apply_action(Craft(card_id=anvil))
+    assert state.scores[Faction.EYRIE] >= 2
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+    assert not state.eyrie.crafting_window_open
+
+
+def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
+    engine = RootEngine(seed=41)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    fox_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.FOX)
+    mouse_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE and cid != fox_card)
+    state.eyrie.decree = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
+    state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing
+    state.board.warriors[12][Faction.EYRIE] = 0
+    state.eyrie.warriors_in_supply += 6
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+    actions = engine.get_valid_actions()
+    assert not any(isinstance(action, Recruit) for action in actions)
+    assert any(isinstance(action, FallIntoTurmoil) for action in actions)

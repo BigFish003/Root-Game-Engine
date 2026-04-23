@@ -7,10 +7,12 @@ from typing import Optional
 
 from .action_generation import get_valid_actions
 from .actions import (
+    AddToDecree,
     Build,
     Craft,
     EndDecision,
     EndPhase,
+    FallIntoTurmoil,
     Recruit,
     SelectBattleClearing,
     SelectBattleTarget,
@@ -121,3 +123,7 @@ class RootEngine:
             eyrie.apply_battle_select_target(self._state, action)
         elif isinstance(action, Craft):
             eyrie.apply_craft(self._state, action)
+        elif isinstance(action, AddToDecree):
+            eyrie.apply_add_to_decree(self._state, action)
+        elif isinstance(action, FallIntoTurmoil):
+            eyrie.apply_fall_into_turmoil(self._state, action)

@@ -9,6 +9,14 @@ from ..models import GameState
 def legal_craft_cards(state: GameState, hand: list[int], faction: Faction) -> list[int]:
     """Return craftable cards from hand under faction crafting rules."""
 
+    if faction == Faction.EYRIE:
+        available = _eyrie_crafting_power(state)
+        return [
+            cid
+            for cid in hand
+            if state.cards[cid].craftable
+            and _can_pay(state.cards[cid].craft_cost, state.cards[cid].craft_cost_any, dict(available))
+        ]
     if faction != Faction.MARQUISE:
         return [cid for cid in hand if state.cards[cid].craftable]
 
@@ -45,6 +53,17 @@ def spend_marquise_crafting_power(state: GameState, card_id: int) -> None:
     remaining = dict(state.marquise.crafting_power)
     _pay_cost(card.craft_cost, card.craft_cost_any, remaining)
     state.marquise.crafting_power = remaining
+
+
+def _eyrie_crafting_power(state: GameState) -> dict[Suit, int]:
+    power = {Suit.FOX: 0, Suit.RABBIT: 0, Suit.MOUSE: 0}
+    for cid, clearing in state.board.clearings.items():
+        roost_count = sum(
+            1 for building in state.board.buildings[cid][Faction.EYRIE] if building == BuildingType.ROOST
+        )
+        if roost_count > 0 and clearing.suit in power:
+            power[clearing.suit] += roost_count
+    return power
 
 
 def _can_pay(cost: dict[Suit, int], any_cost: int, available: dict[Suit, int]) -> bool:

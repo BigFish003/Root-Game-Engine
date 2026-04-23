@@ -50,6 +50,13 @@ def _on_daylight_start(state: GameState) -> None:
         state.marquise.recruit_used_this_turn = False
         initialize_marquise_crafting_power(state)
         state.marquise.crafting_window_open = True
+    elif state.turn.current_faction == Faction.EYRIE:
+        state.eyrie.crafting_window_open = True
+        state.eyrie.resolving_decree = False
+        state.eyrie.decree_column_index = 0
+        state.eyrie.decree_cards_remaining = {
+            key: list(cards) for key, cards in state.eyrie.decree.items()
+        }
 
 
 def _resolve_evening_effects(state: GameState) -> None:

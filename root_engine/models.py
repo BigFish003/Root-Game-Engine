@@ -95,6 +95,12 @@ class EyrieState:
     )
     hand: list[int] = field(default_factory=list)
     crafted_effects: list[str] = field(default_factory=list)
+    crafting_window_open: bool = False
+    resolving_decree: bool = False
+    decree_column_index: int = 0
+    decree_cards_remaining: dict[str, list[int]] = field(
+        default_factory=lambda: {"recruit": [], "move": [], "battle": [], "build": []}
+    )
 
 
 @dataclass
