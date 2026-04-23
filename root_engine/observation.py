@@ -8,6 +8,8 @@ from typing import Any
 from .enums import Faction, Suit
 from .models import GameState
 
+ALLIANCE_TOTAL_WARRIORS = 10
+
 
 @dataclass(frozen=True)
 class ObservedClearing:
@@ -128,9 +130,14 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "decree": {k: list(v) for k, v in state.eyrie.decree.items()},
         }
     if faction == Faction.ALLIANCE:
+        alliance_bases_remaining = {
+            suit.value: not built for suit, built in state.alliance.bases.items()
+        }
         return {
+            "warriors_in_supply": _remaining_warriors(state, faction, ALLIANCE_TOTAL_WARRIORS),
             "officers": state.alliance.officers,
             "bases": {k.value: v for k, v in state.alliance.bases.items()},
+            "bases_in_supply": alliance_bases_remaining,
             "sympathy_in_supply": state.alliance.sympathy_in_supply,
             "supporters_hidden": True,
         }
@@ -156,3 +163,8 @@ def _count_tokens_on_map(state: GameState, faction: Faction, token_name: str) ->
     for cid in state.board.clearings:
         total += sum(1 for t in state.board.tokens[cid][faction] if t.value == token_name)
     return total
+
+
+def _remaining_warriors(state: GameState, faction: Faction, total_warriors: int) -> int:
+    warriors_on_map = sum(state.board.warriors[cid][faction] for cid in state.board.clearings)
+    return total_warriors - warriors_on_map
