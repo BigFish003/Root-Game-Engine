@@ -53,17 +53,14 @@ class state_renderer:
             cx, cy = center
             square_size = 10
             half_size = square_size / 2
-            corner_offset = radius * 0.45
-            slot_offsets = [
-                (-corner_offset, -corner_offset),  # top-left
-                (corner_offset, -corner_offset),   # top-right
-                (-corner_offset, corner_offset),   # bottom-left
-                (corner_offset, corner_offset),    # bottom-right
-            ]
+            spacing = 4
+            slots_to_draw = min(slots, 3)
+            total_width = slots_to_draw * square_size + (slots_to_draw - 1) * spacing
+            start_x = cx - total_width / 2 + half_size
+            slot_center_y = cy - radius * 0.45
 
-            for slot_offset_x, slot_offset_y in slot_offsets[:slots]:
-                slot_center_x = cx + slot_offset_x
-                slot_center_y = cy + slot_offset_y
+            for slot_index in range(slots_to_draw):
+                slot_center_x = start_x + slot_index * (square_size + spacing)
                 left = slot_center_x - half_size
                 top = slot_center_y - half_size
                 draw.rectangle(
