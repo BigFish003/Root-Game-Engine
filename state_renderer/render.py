@@ -8,40 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class state_renderer:
+
+
     """Helpers for rendering and inspecting Root game states."""
-
-    def build_state_dictionary(self, state: Any) -> dict[str, Any]:
-        """Return an easy-to-read dictionary from a state/observation object.
-
-        The output is intended for renderer development and keeps a stable,
-        understandable top-level structure while preserving all nested data.
-        """
-
-        raw = self._normalize_value(state)
-
-        if not isinstance(raw, dict):
-            return {"value": raw}
-
-        return {
-            "meta": {
-                "state_type": type(state).__name__,
-                "current_faction": raw.get("current_faction"),
-                "current_phase": raw.get("current_phase"),
-                "observer": raw.get("observer"),
-            },
-            "turn": raw.get("turn", {}),
-            "scores": raw.get("scores", {}),
-            "victory_points": raw.get("victory_points", {}),
-            "clearings": raw.get("clearings", {}),
-            "paths": raw.get("paths", []),
-            "factions": raw.get("factions", {}),
-            "cards": {
-                "deck_count": raw.get("deck_count"),
-                "discard_pile": raw.get("discard_pile", []),
-            },
-            "raw": raw,
-        }
-
     def render_board(self, observation: Any, output_path: str) -> None:
         """Render the game board as an image.
 
@@ -49,9 +18,20 @@ class state_renderer:
         state dictionary for easier future rendering development.
         """
 
+        def make_marquise_piece(x, y):
+            width, height, orange = 18, 30, (255, 128, 0)
+            ear_base_y = y + height // 3
+            draw.rectangle((x, ear_base_y, x + width, y + height), fill=orange)
+            draw.polygon([(x + width // 3, y), (x, ear_base_y), (x + width // 2, ear_base_y)], fill=orange)
+            draw.polygon([(x + 2 * width // 3, y), (x + width // 2, ear_base_y), (x + width, ear_base_y)], fill=orange)
+            draw.line([(x, y + height), (x, ear_base_y), (x + width // 3, y), (x + width // 2, ear_base_y),(x + 2 * width // 3, y), (x + width, ear_base_y), (x + width, y + height), (x, y + height)], fill="black", width=1)
+            r, eye_y = 1, y + height * 0.57
+            for ex in (x + width * 0.35, x + width * 0.65):
+                draw.ellipse((ex - r, eye_y - r, ex + r, eye_y + r), fill="black")
+
         def add_build_spots(center: tuple[int, int], slots: int) -> None:
             cx, cy = center
-            square_size = 10
+            square_size = 20
             half_size = square_size / 2
             spacing = 4
             slots_to_draw = min(slots, 3)
@@ -76,6 +56,14 @@ class state_renderer:
         draw = ImageDraw.Draw(img)
         font = ImageFont.load_default()
 
+        #piece images ex: img.paste(Workshop, (50, 50), Workshop)
+        Workshop = Image.open(r"state_renderer\images\anvil_piece.png").convert("RGBA")
+        Workshop = Workshop.resize((20, 20))
+        Sawmill = Image.open(r"state_renderer\images\Sawmill.webp").convert("RGBA")
+        Sawmill = Sawmill.resize((20, 20))
+        Recruiter = Image.open(r"state_renderer\images\Recruiter.webp").convert("RGBA")
+        Recruiter = Recruiter.resize((20, 20))
+
         # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
 
@@ -93,7 +81,7 @@ class state_renderer:
             11: (330, 270),
             12: (480, 300),
         }
-        radius = 35
+        radius = 45
 
         # Draw paths first so clearings appear on top of paths.
         drawn_edges: set[tuple[int, int]] = set()
@@ -135,6 +123,7 @@ class state_renderer:
         #faction boards
         #marquise
         draw.rectangle((0,350,200,600), fill=(229,182,88), outline="black", width=3)
+        draw.rectangle((10, 450, 190, 590), fill=(223, 194, 134), outline="black", width=3)
 
         #eryie
         draw.rectangle((200,350,400,600), fill=(46,117,179), outline="black", width=3)
@@ -147,6 +136,39 @@ class state_renderer:
 
 
         img.save(output_path)
+
+    def build_state_dictionary(self, state: Any) -> dict[str, Any]:
+        """Return an easy-to-read dictionary from a state/observation object.
+
+        The output is intended for renderer development and keeps a stable,
+        understandable top-level structure while preserving all nested data.
+        """
+
+        raw = self._normalize_value(state)
+
+        if not isinstance(raw, dict):
+            return {"value": raw}
+
+        return {
+            "meta": {
+                "state_type": type(state).__name__,
+                "current_faction": raw.get("current_faction"),
+                "current_phase": raw.get("current_phase"),
+                "observer": raw.get("observer"),
+            },
+            "turn": raw.get("turn", {}),
+            "scores": raw.get("scores", {}),
+            "victory_points": raw.get("victory_points", {}),
+            "clearings": raw.get("clearings", {}),
+            "paths": raw.get("paths", []),
+            "factions": raw.get("factions", {}),
+            "cards": {
+                "deck_count": raw.get("deck_count"),
+                "discard_pile": raw.get("discard_pile", []),
+            },
+            "raw": raw,
+        }
+
 
     def _normalize_value(self, value: Any) -> Any:
         """Recursively convert dataclasses/enums to Python primitives."""
