@@ -26,6 +26,10 @@ class Card:
     name: str
     suit: Suit
     tags: tuple[CardTag, ...] = ()
+    craft_cost: dict[Suit, int] = field(default_factory=dict)
+    craft_cost_any: int = 0
+    craftable: bool = True
+    vp_on_craft: int = 0
 
 
 @dataclass
@@ -75,6 +79,9 @@ class MarquiseState:
     crafted_effects: list[str] = field(default_factory=list)
     daylight_actions_used: int = 0
     recruit_used_this_turn: bool = False
+    crafting_power: dict[Suit, int] = field(
+        default_factory=lambda: {Suit.FOX: 0, Suit.RABBIT: 0, Suit.MOUSE: 0}
+    )
 
 
 @dataclass
