@@ -25,12 +25,23 @@ class state_renderer:
         def make_marquise_piece(x: int, y: int) -> None:
             width, height, orange = 18, 30, (255, 128, 0)
             ear_base_y = y + height // 3
-            draw.rectangle((x, ear_base_y, x + width, y + height), fill=orange)
-            draw.polygon([(x + width // 3, y), (x, ear_base_y), (x + width // 2, ear_base_y)], fill=orange)
-            draw.polygon(
-                [(x + 2 * width // 3, y), (x + width // 2, ear_base_y), (x + width, ear_base_y)],
-                fill=orange,
-            )
+            _draw_warrior_piece(x, y, orange)
+
+        def make_eyrie_piece(x: int, y: int) -> None:
+            _draw_warrior_piece(x, y, (72, 135, 201))
+
+        def make_alliance_piece(x: int, y: int) -> None:
+            _draw_warrior_piece(x, y, (84, 155, 72))
+
+        def make_vagabond_piece(x: int, y: int) -> None:
+            _draw_warrior_piece(x, y, (145, 145, 145))
+
+        def _draw_warrior_piece(x: int, y: int, color: tuple[int, int, int]) -> None:
+            width, height = 18, 30
+            ear_base_y = y + height // 3
+            draw.rectangle((x, ear_base_y, x + width, y + height), fill=color)
+            draw.polygon([(x + width // 3, y), (x, ear_base_y), (x + width // 2, ear_base_y)], fill=color)
+            draw.polygon([(x + 2 * width // 3, y), (x + width // 2, ear_base_y), (x + width, ear_base_y)], fill=color)
             draw.line(
                 [
                     (x, y + height),
@@ -49,7 +60,7 @@ class state_renderer:
             for ex in (x + width * 0.35, x + width * 0.65):
                 draw.ellipse((ex - r, eye_y - r, ex + r, eye_y + r), fill="black")
 
-        def add_build_spots(center: tuple[int, int], slots: int) -> None:
+        def add_build_spots(center: tuple[int, int], slots: int, placed_buildings: list[tuple[str, str]]) -> None:
             cx, cy = center
             square_size = 20
             half_size = square_size / 2
@@ -64,6 +75,58 @@ class state_renderer:
                 left = slot_center_x - half_size
                 top = slot_center_y - half_size
                 draw.rectangle((left, top, left + square_size, top + square_size), fill=None, outline="black", width=1)
+                if slot_index >= len(placed_buildings):
+                    continue
+                faction, building_name = placed_buildings[slot_index]
+                image = building_images.get((faction, building_name))
+                if image is None:
+                    draw.text((left + 2, top + 5), building_name[:2].upper(), fill="black", font=small_font)
+                    continue
+                px = int(left + (square_size - image.width) // 2)
+                py = int(top + (square_size - image.height) // 2)
+                img.paste(image, (px, py), image)
+
+        def place_tokens(center: tuple[int, int], placed_tokens: list[tuple[str, str]]) -> None:
+            if not placed_tokens:
+                return
+            cx, cy = center
+            icon_size = 16
+            spacing = 3
+            total_width = len(placed_tokens) * icon_size + (len(placed_tokens) - 1) * spacing
+            start_x = cx - total_width // 2
+            top_y = cy - icon_size // 2
+            for idx, (faction, token_name) in enumerate(placed_tokens):
+                x = int(start_x + idx * (icon_size + spacing))
+                image = token_images.get((faction, token_name))
+                if image is None:
+                    draw.rectangle((x, top_y, x + icon_size, top_y + icon_size), outline="black", fill=(245, 245, 210), width=1)
+                    draw.text((x + 2, top_y + 4), token_name[:2].upper(), fill="black", font=small_font)
+                    continue
+                img.paste(image, (x, top_y), image)
+
+        def place_warriors(center: tuple[int, int], placed_warriors: list[str]) -> None:
+            if not placed_warriors:
+                return
+            cx, cy = center
+            piece_width, piece_height = 18, 30
+            usable_width = int(radius * 1.55)
+            count = len(placed_warriors)
+            max_left = cx - usable_width // 2
+            step = piece_width if count == 1 else min(piece_width, (usable_width - piece_width) // max(1, count - 1))
+            start_x = max_left
+            needed_width = piece_width + max(0, count - 1) * step
+            if needed_width < usable_width:
+                start_x = cx - needed_width // 2
+            y = cy + int(radius * 0.23)
+            warrior_drawers = {
+                "marquise": make_marquise_piece,
+                "eyrie": make_eyrie_piece,
+                "alliance": make_alliance_piece,
+                "vagabond": make_vagabond_piece,
+            }
+            for idx, faction in enumerate(placed_warriors):
+                x = int(start_x + idx * step)
+                warrior_drawers.get(faction, make_vagabond_piece)(x, y)
 
         def draw_supply_row(
             y_center: int,
@@ -214,7 +277,7 @@ class state_renderer:
                 oy = officer_rect[1] + 16 + (idx // 8) * 10
                 draw.ellipse((ox, oy, ox + 7, oy + 7), fill=(230, 230, 230), outline="black", width=1)
 
-            sympathy_slots = 9
+            sympathy_slots = 10
             sympathy_remaining = int(public_data.get("sympathy_in_supply", 0))
             track_x = board_rect[2] - 28
             track_start_y = cursor_y
@@ -263,6 +326,7 @@ class state_renderer:
         Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA").resize((16, 16))
         Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA").resize((16, 16))
         Roost = Image.open("state_renderer/images/Roost.webp").convert("RGBA").resize((16, 16))
+        Wood = Image.open("state_renderer/images/Wood.webp").convert("RGBA").resize((16, 16))
         Mouse_base = Image.open("state_renderer/images/Mouse_base.webp").convert("RGBA").resize((16, 16))
         Fox_base = Image.open("state_renderer/images/Fox_base.webp").convert("RGBA").resize((16, 16))
         Rabbit_base = Image.open("state_renderer/images/Rabbit_base.webp").convert("RGBA").resize((16, 16))
@@ -271,6 +335,19 @@ class state_renderer:
         Fox = Image.open("state_renderer/images/Fox.png").convert("RGBA").resize((8, 8))
         Rabbit = Image.open("state_renderer/images/Rabbit.png").convert("RGBA").resize((8, 8))
         Mouse = Image.open("state_renderer/images/Mouse.png").convert("RGBA").resize((8, 8))
+        building_images = {
+            ("marquise", "sawmill"): Sawmill,
+            ("marquise", "workshop"): Workshop,
+            ("marquise", "recruiter"): Recruiter,
+            ("eyrie", "roost"): Roost,
+            ("alliance", "mouse_base"): Mouse_base,
+            ("alliance", "fox_base"): Fox_base,
+            ("alliance", "rabbit_base"): Rabbit_base,
+        }
+        token_images = {
+            ("marquise", "wood"): Wood,
+            ("alliance", "sympathy"): Sympathy,
+        }
 
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
 
@@ -323,7 +400,24 @@ class state_renderer:
 
             slots = int(clearing_data.get("building_slots", 0))
             if slots > 0:
-                add_build_spots(center, slots)
+                buildings: list[tuple[str, str]] = []
+                for faction in ("marquise", "eyrie", "alliance", "vagabond"):
+                    for building_name in clearing_data.get("buildings", {}).get(faction, []):
+                        if building_name == "base":
+                            clearing_suit = str(clearing_data.get("suit", "")).lower()
+                            building_name = f"{clearing_suit}_base" if clearing_suit in ("mouse", "fox", "rabbit") else "base"
+                        buildings.append((faction, building_name))
+                add_build_spots(center, slots, buildings)
+
+            tokens: list[tuple[str, str]] = []
+            for faction in ("marquise", "eyrie", "alliance", "vagabond"):
+                tokens.extend((faction, token_name) for token_name in clearing_data.get("tokens", {}).get(faction, []))
+            place_tokens(center, tokens)
+
+            warriors: list[str] = []
+            for faction in ("marquise", "eyrie", "alliance", "vagabond"):
+                warriors.extend([faction] * int(clearing_data.get("warriors", {}).get(faction, 0)))
+            place_warriors(center, warriors)
 
         marquise_rect = (0, 350, 200, 600)
         eyrie_rect = (200, 350, 400, 600)
