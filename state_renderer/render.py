@@ -126,8 +126,23 @@ class state_renderer:
             draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
 
             slots = int(clearing_data.get("building_slots", 0))
+            print(slots)
             if slots > 0:
                 add_build_spots(center, slots)
+
+        #faction boards
+        #marquise
+        draw.rectangle((0,350,200,600), fill=(229,182,88), outline="black", width=3)
+
+        #eryie
+        draw.rectangle((200,350,400,600), fill=(46,117,179), outline="black", width=3)
+
+        #woodland
+        draw.rectangle((400,350,600,600), fill=(53,101,40), outline="black", width=3)
+
+        #vagabound
+        draw.rectangle((600,350,800,600), fill=(111,111,111), outline="black", width=3)
+
 
         img.save(output_path)
 

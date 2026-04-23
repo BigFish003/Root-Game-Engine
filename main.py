@@ -7,7 +7,7 @@ engine = RootEngine(seed=7)
 render = state_renderer()
 
 marquise_observation = engine.get_observation(Faction.MARQUISE)
-
+print(marquise_observation)
 render.render_board(marquise_observation, 'game_state.png')
 
 
