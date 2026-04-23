@@ -50,6 +50,42 @@ class state_renderer:
                     width=1,
                 )
 
+        def add_marquise_supply_tiles(inner_rect: tuple[int, int, int, int]) -> None:
+            left, top, right, bottom = inner_rect
+            faction_data = state_dictionary.get("factions", {}).get("marquise", {}).get("public_data", {})
+            buildings = faction_data.get("buildings_in_supply", {})
+            rows = [
+                ("Workshop", int(buildings.get("workshop", 0)), Workshop),
+                ("Sawmill", int(buildings.get("sawmill", 0)), Sawmill),
+                ("Recruiter", int(buildings.get("recruiter", 0)), Recruiter),
+            ]
+
+            row_height = (bottom - top) // len(rows)
+            slot_size = 18
+            slot_spacing = 4
+            slots_per_row = 6
+            slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
+            slots_start_x = right - 8 - slots_width
+
+            for idx, (label, remaining, piece_image) in enumerate(rows):
+                row_top = top + idx * row_height
+                row_center_y = row_top + row_height // 2
+                draw.text((left + 8, row_center_y - 6), label, fill="black", font=font)
+
+                tile_y = row_center_y - slot_size // 2
+                for slot_idx in range(slots_per_row):
+                    tile_x = slots_start_x + slot_idx * (slot_size + slot_spacing)
+                    draw.rectangle(
+                        (tile_x, tile_y, tile_x + slot_size, tile_y + slot_size),
+                        fill=None,
+                        outline="black",
+                        width=1,
+                    )
+                    if slot_idx < remaining:
+                        piece_x = tile_x + (slot_size - piece_image.width) // 2
+                        piece_y = tile_y + (slot_size - piece_image.height) // 2
+                        img.paste(piece_image, (piece_x, piece_y), piece_image)
+
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
@@ -57,12 +93,12 @@ class state_renderer:
         font = ImageFont.load_default()
 
         #piece images ex: img.paste(Workshop, (50, 50), Workshop)
-        Workshop = Image.open(r"state_renderer\images\anvil_piece.png").convert("RGBA")
-        Workshop = Workshop.resize((20, 20))
-        Sawmill = Image.open(r"state_renderer\images\Sawmill.webp").convert("RGBA")
-        Sawmill = Sawmill.resize((20, 20))
-        Recruiter = Image.open(r"state_renderer\images\Recruiter.webp").convert("RGBA")
-        Recruiter = Recruiter.resize((20, 20))
+        Workshop = Image.open("state_renderer/images/anvil_piece.png").convert("RGBA")
+        Workshop = Workshop.resize((16, 16))
+        Sawmill = Image.open("state_renderer/images/Sawmill.webp").convert("RGBA")
+        Sawmill = Sawmill.resize((16, 16))
+        Recruiter = Image.open("state_renderer/images/Recruiter.webp").convert("RGBA")
+        Recruiter = Recruiter.resize((16, 16))
 
         # map
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
@@ -123,7 +159,9 @@ class state_renderer:
         #faction boards
         #marquise
         draw.rectangle((0,350,200,600), fill=(229,182,88), outline="black", width=3)
-        draw.rectangle((10, 450, 190, 590), fill=(223, 194, 134), outline="black", width=3)
+        marquise_inner_rect = (10, 450, 190, 590)
+        draw.rectangle(marquise_inner_rect, fill=(223, 194, 134), outline="black", width=3)
+        add_marquise_supply_tiles(marquise_inner_rect)
 
         #eryie
         draw.rectangle((200,350,400,600), fill=(46,117,179), outline="black", width=3)
