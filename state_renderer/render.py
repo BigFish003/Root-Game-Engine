@@ -54,7 +54,7 @@ class state_renderer:
         img = Image.new("RGB", (800, 600), color="white")
         draw = ImageDraw.Draw(img)
 
-        draw.rectangle((0, 0, 550, 350), fill="blue", outline="black", width=3)
+        draw.rectangle((0, 0, 550, 350), fill="lightgreen", outline="black", width=3)
         draw.text((12, 12), f"State: {state_dictionary['meta']['state_type']}", fill="black")
 
         img.save(output_path)
