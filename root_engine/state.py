@@ -75,14 +75,14 @@ def _setup_starting_positions(state: GameState) -> None:
     state.marquise.buildings_in_supply[BuildingType.SAWMILL] -= 1
     state.marquise.buildings_in_supply[BuildingType.WORKSHOP] -= 1
     state.marquise.buildings_in_supply[BuildingType.RECRUITER] -= 1
-    for cid in [1, 2, 4, 5, 6, 8, 10, 11]:
+    for cid in [1, 2,3, 4, 5, 6,7, 8,9, 10, 11]:
         state.board.warriors[cid][Faction.MARQUISE] = 1
         state.marquise.warriors_in_supply -= 1
 
     # Eyrie opening
-    state.board.buildings[11][Faction.EYRIE].append(BuildingType.ROOST)
+    state.board.buildings[12][Faction.EYRIE].append(BuildingType.ROOST)
     state.eyrie.roosts_in_supply -= 1
-    state.board.warriors[11][Faction.EYRIE] = 6
+    state.board.warriors[12][Faction.EYRIE] = 6
     state.eyrie.warriors_in_supply -= 6
 
     # Vagabond opening (forest abstracted as clearing 12 adjacency anchor)
