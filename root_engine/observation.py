@@ -15,6 +15,7 @@ class ObservedClearing:
 
     clearing_id: int
     suit: Suit
+    building_slots: int
     adjacent_clearings: list[int]
     warriors: dict[Faction, int]
     buildings: dict[Faction, list[str]]
@@ -57,6 +58,7 @@ def build_observation(state: GameState, observer: Faction) -> Observation:
         cid: ObservedClearing(
             clearing_id=cid,
             suit=clearing.suit,
+            building_slots=clearing.building_slots,
             adjacent_clearings=list(clearing.adjacent_clearings),
             warriors=dict(state.board.warriors[cid]),
             buildings={f: [b.value for b in bl] for f, bl in state.board.buildings[cid].items()},
