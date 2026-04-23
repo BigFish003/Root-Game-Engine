@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from ..actions import (
+    AddToDecree,
     Build,
     Craft,
     EndDecision,
     EndPhase,
+    FallIntoTurmoil,
     Recruit,
     SelectBattleClearing,
     SelectBattleTarget,
     SelectMoveDestination,
     SelectMoveSource,
 )
-from ..enums import BuildingType, DecisionType, Faction, Phase
+from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards
@@ -21,17 +23,29 @@ from .movement import legal_move_destinations, legal_move_sources
 
 
 def valid_actions(state: GameState) -> list:
+    if state.turn.phase == Phase.BIRDSONG:
+        actions: list = [EndPhase()]
+        for card_id in state.eyrie.hand:
+            for column in ["recruit", "move", "battle", "build"]:
+                actions.append(AddToDecree(card_id=card_id, column=column))
+        return actions
     if state.turn.phase != Phase.DAYLIGHT:
         return [EndPhase()]
 
     ctx = state.decision_context
     if ctx.decision_type == DecisionType.MAIN_ACTION:
-        actions: list = [EndPhase()]
-        actions.extend(Recruit(cid) for cid in _legal_recruit_clearings(state))
-        actions.extend(Build(clearing_id=cid, building_type=BuildingType.ROOST) for cid in _legal_roost_builds(state))
-        actions.extend(SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.EYRIE))
-        actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.EYRIE))
-        actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE))
+        _ensure_decree_progress_initialized(state)
+        actions: list = []
+        if state.eyrie.crafting_window_open:
+            actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE))
+
+        decree_actions = _current_decree_actions(state)
+        if decree_actions:
+            actions.extend(decree_actions)
+        elif _has_remaining_decree_cards(state):
+            actions.append(FallIntoTurmoil())
+        else:
+            actions.append(EndPhase())
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
         return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
@@ -48,6 +62,7 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("No Eyrie warriors in supply")
     state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
     state.eyrie.warriors_in_supply -= 1
+    _consume_decree_card(state, "recruit", state.board.clearings[action.clearing_id].suit)
 
 
 def apply_build(state: GameState, action: Build) -> None:
@@ -60,6 +75,7 @@ def apply_build(state: GameState, action: Build) -> None:
     state.board.buildings[action.clearing_id][Faction.EYRIE].append(BuildingType.ROOST)
     state.eyrie.roosts_in_supply -= 1
     state.scores[Faction.EYRIE] += 1
+    _consume_decree_card(state, "build", state.board.clearings[action.clearing_id].suit)
 
 
 def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
@@ -76,6 +92,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.board.warriors[source][Faction.EYRIE] -= 1
     state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    _consume_decree_card(state, "move", state.board.clearings[source].suit)
     state.decision_context.selected_source = None
 
 
@@ -90,15 +107,48 @@ def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> 
         raise ValueError("No battle clearing selected")
     target = Faction(action.target_faction)
     resolve_basic_battle(state, Faction.EYRIE, target, clearing)
+    _consume_decree_card(state, "battle", state.board.clearings[clearing].suit)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_battle_clearing = None
 
 
 def apply_craft(state: GameState, action: Craft) -> None:
+    if action.card_id not in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE):
+        raise ValueError("Card cannot be crafted with available roosts")
     if action.card_id not in state.eyrie.hand:
         raise ValueError("Card not in hand")
+    if not state.eyrie.crafting_window_open:
+        raise ValueError("Crafting is only available before decree resolution")
+    card = state.cards[action.card_id]
     state.eyrie.hand.remove(action.card_id)
-    state.discard_pile.append(action.card_id)
+    if card.vp_on_craft > 0:
+        state.scores[Faction.EYRIE] += card.vp_on_craft
+    if card.name.startswith("Favor of the"):
+        _resolve_favor(state, card.suit)
+    if CardTag.PERSISTENT_EFFECT in card.tags:
+        state.eyrie.crafted_effects.append(card.name)
+    else:
+        state.discard_pile.append(action.card_id)
+
+
+def apply_add_to_decree(state: GameState, action: AddToDecree) -> None:
+    if action.card_id not in state.eyrie.hand:
+        raise ValueError("Card not in hand")
+    if action.column not in state.eyrie.decree:
+        raise ValueError("Invalid decree column")
+    state.eyrie.hand.remove(action.card_id)
+    state.eyrie.decree[action.column].append(action.card_id)
+
+
+def apply_fall_into_turmoil(state: GameState, action: FallIntoTurmoil) -> None:
+    del action
+    for cards in state.eyrie.decree.values():
+        state.discard_pile.extend(cards)
+        cards.clear()
+    state.eyrie.decree_cards_remaining = {key: [] for key in state.eyrie.decree}
+    state.eyrie.crafting_window_open = False
+    state.eyrie.resolving_decree = False
+    state.eyrie.decree_column_index = 0
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
@@ -118,3 +168,99 @@ def _legal_roost_builds(state: GameState) -> list[int]:
         if len(state.board.buildings[cid][Faction.EYRIE]) < slots:
             result.append(cid)
     return result
+
+
+def _current_decree_actions(state: GameState) -> list:
+    _advance_decree_column(state)
+    column = _current_column(state)
+    if column is None:
+        return []
+    remaining = state.eyrie.decree_cards_remaining[column]
+    if not remaining:
+        return []
+    suits = [_card_suit(state, card_id) for card_id in remaining]
+
+    if column == "recruit":
+        return [Recruit(cid) for cid in _legal_recruit_clearings(state) if _suit_matches_any(state, cid, suits)]
+    if column == "move":
+        return [SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.EYRIE) if _suit_matches_any(state, cid, suits)]
+    if column == "battle":
+        return [SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.EYRIE) if _suit_matches_any(state, cid, suits)]
+    return [
+        Build(clearing_id=cid, building_type=BuildingType.ROOST)
+        for cid in _legal_roost_builds(state)
+        if _suit_matches_any(state, cid, suits)
+    ]
+
+
+def _card_suit(state: GameState, card_id: int) -> Suit:
+    return state.cards[card_id].suit
+
+
+def _suit_matches_any(state: GameState, clearing_id: int, suits: list[Suit]) -> bool:
+    clearing_suit = state.board.clearings[clearing_id].suit
+    return any(s == Suit.BIRD or s == clearing_suit for s in suits)
+
+
+def _consume_decree_card(state: GameState, column: str, clearing_suit: Suit) -> None:
+    _ensure_decree_progress_initialized(state)
+    if state.eyrie.crafting_window_open:
+        state.eyrie.crafting_window_open = False
+    remaining = state.eyrie.decree_cards_remaining[column]
+    for idx, card_id in enumerate(remaining):
+        suit = state.cards[card_id].suit
+        if suit == clearing_suit:
+            remaining.pop(idx)
+            _advance_decree_column(state)
+            return
+    for idx, card_id in enumerate(remaining):
+        if state.cards[card_id].suit == Suit.BIRD:
+            remaining.pop(idx)
+            _advance_decree_column(state)
+            return
+    raise ValueError("Action does not satisfy any decree card in current column")
+
+
+def _advance_decree_column(state: GameState) -> None:
+    columns = ["recruit", "move", "battle", "build"]
+    while state.eyrie.decree_column_index < len(columns):
+        if state.eyrie.decree_cards_remaining[columns[state.eyrie.decree_column_index]]:
+            return
+        state.eyrie.decree_column_index += 1
+
+
+def _current_column(state: GameState) -> str | None:
+    columns = ["recruit", "move", "battle", "build"]
+    if state.eyrie.decree_column_index >= len(columns):
+        return None
+    return columns[state.eyrie.decree_column_index]
+
+
+def _has_remaining_decree_cards(state: GameState) -> bool:
+    return any(state.eyrie.decree_cards_remaining[c] for c in ["recruit", "move", "battle", "build"])
+
+
+def _ensure_decree_progress_initialized(state: GameState) -> None:
+    if state.eyrie.decree_cards_remaining == {key: [] for key in state.eyrie.decree} and any(
+        state.eyrie.decree.values()
+    ):
+        state.eyrie.decree_cards_remaining = {
+            key: list(cards) for key, cards in state.eyrie.decree.items()
+        }
+    state.eyrie.resolving_decree = True
+
+
+def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
+    for cid, clearing in state.board.clearings.items():
+        if clearing.suit != favor_suit:
+            continue
+        state.board.warriors[cid][Faction.MARQUISE] = 0
+        state.board.warriors[cid][Faction.ALLIANCE] = 0
+        state.board.buildings[cid][Faction.MARQUISE].clear()
+        state.board.buildings[cid][Faction.ALLIANCE].clear()
+        state.board.tokens[cid][Faction.MARQUISE] = [
+            token for token in state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.KEEP
+        ]
+        state.board.tokens[cid][Faction.ALLIANCE] = [
+            token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+        ]

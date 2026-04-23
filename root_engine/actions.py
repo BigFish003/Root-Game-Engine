@@ -71,3 +71,14 @@ class SelectBattleTarget(Action):
 @dataclass(frozen=True)
 class Craft(Action):
     card_id: int
+
+
+@dataclass(frozen=True)
+class AddToDecree(Action):
+    card_id: int
+    column: str
+
+
+@dataclass(frozen=True)
+class FallIntoTurmoil(Action):
+    """Resolve forced turmoil when decree cannot be completed."""
