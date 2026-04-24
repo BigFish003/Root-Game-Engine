@@ -101,6 +101,9 @@ class EyrieState:
     decree_cards_remaining: dict[str, list[int]] = field(
         default_factory=lambda: {"recruit": [], "move": [], "battle": [], "build": []}
     )
+    birdsong_cards_added: int = 0
+    pending_leader_selection: bool = False
+    turmoiled_leaders: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -30,6 +30,8 @@ def _advance_to_next_faction(state: GameState) -> None:
         state.turn.round_number += 1
     state.turn.current_faction = order[nxt]
     state.turn.phase = Phase.BIRDSONG
+    if state.turn.current_faction == Faction.EYRIE:
+        state.eyrie.birdsong_cards_added = 0
 
 
 def _resolve_birdsong_effects(state: GameState) -> None:
