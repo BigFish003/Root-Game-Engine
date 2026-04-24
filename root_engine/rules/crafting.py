@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..enums import BuildingType, Faction, Suit
+from ..enums import BuildingType, Faction, Suit, TokenType
 from ..models import GameState
 
 
@@ -11,6 +11,14 @@ def legal_craft_cards(state: GameState, hand: list[int], faction: Faction) -> li
 
     if faction == Faction.EYRIE:
         available = _eyrie_crafting_power(state)
+        return [
+            cid
+            for cid in hand
+            if state.cards[cid].craftable
+            and _can_pay(state.cards[cid].craft_cost, state.cards[cid].craft_cost_any, dict(available))
+        ]
+    if faction == Faction.ALLIANCE:
+        available = _alliance_crafting_power(state)
         return [
             cid
             for cid in hand
@@ -63,6 +71,15 @@ def _eyrie_crafting_power(state: GameState) -> dict[Suit, int]:
         )
         if roost_count > 0 and clearing.suit in power:
             power[clearing.suit] += roost_count
+    return power
+
+
+def _alliance_crafting_power(state: GameState) -> dict[Suit, int]:
+    power = {Suit.FOX: 0, Suit.RABBIT: 0, Suit.MOUSE: 0}
+    for cid, clearing in state.board.clearings.items():
+        sympathy_count = sum(1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY)
+        if sympathy_count > 0 and clearing.suit in power:
+            power[clearing.suit] += sympathy_count
     return power
 
 
