@@ -7,6 +7,7 @@ from typing import Any
 
 from .enums import Faction, Suit
 from .models import GameState
+from .rules.rulership import ruler_of_clearing
 
 ALLIANCE_TOTAL_WARRIORS = 10
 
@@ -103,15 +104,7 @@ def build_observation(state: GameState, observer: Faction) -> Observation:
 
 
 def _determine_ruler(state: GameState, clearing_id: int) -> Faction | None:
-    rule_counts = {
-        faction: state.board.warriors[clearing_id][faction] + len(state.board.buildings[clearing_id][faction])
-        for faction in [Faction.MARQUISE, Faction.EYRIE, Faction.ALLIANCE]
-    }
-    top = max(rule_counts.values())
-    if top == 0:
-        return None
-    leaders = [f for f, count in rule_counts.items() if count == top]
-    return leaders[0] if len(leaders) == 1 else None
+    return ruler_of_clearing(state, clearing_id)
 
 
 def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
