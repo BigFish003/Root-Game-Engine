@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from root_engine.engine import RootEngine
-from root_engine.enums import Faction
+from root_engine.enums import Faction, Suit
 from root_engine.render import TextRenderer, VisualRenderer, get_renderer
 from root_engine.renderer import RootRenderer
 
@@ -54,6 +54,22 @@ def test_visual_renderer_outputs_svg_and_respects_hidden_hands() -> None:
     assert "hidden(" not in full_svg
     assert "Observer: marquise" in obs_svg
     assert "hidden(" in obs_svg
+
+
+def test_eyrie_observation_exposes_decree_suits() -> None:
+    engine = RootEngine(seed=55)
+    state = engine.get_state()
+
+    fox_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.FOX)
+    mouse_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE and cid != fox_card)
+    state.eyrie.decree = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
+
+    obs = engine.get_observation(Faction.MARQUISE)
+    eyrie_public = obs.factions[Faction.EYRIE].public_data
+
+    assert eyrie_public["decree"]["recruit"] == [fox_card]
+    assert eyrie_public["decree_suits"]["recruit"] == ["fox"]
+    assert eyrie_public["decree_suits"]["move"] == ["mouse"]
 
 
 def test_renderer_factory_returns_requested_renderers() -> None:

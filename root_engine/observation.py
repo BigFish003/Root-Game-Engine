@@ -116,11 +116,16 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "wood_tokens_on_map": _count_tokens_on_map(state, faction, "wood"),
         }
     if faction == Faction.EYRIE:
+        decree = {k: list(v) for k, v in state.eyrie.decree.items()}
         return {
             "warriors_in_supply": state.eyrie.warriors_in_supply,
             "roosts_in_supply": state.eyrie.roosts_in_supply,
             "leader": state.eyrie.leader,
-            "decree": {k: list(v) for k, v in state.eyrie.decree.items()},
+            "decree": decree,
+            "decree_suits": {
+                column: [state.cards[card_id].suit.value if card_id in state.cards else Suit.BIRD.value for card_id in card_ids]
+                for column, card_ids in decree.items()
+            },
         }
     if faction == Faction.ALLIANCE:
         alliance_bases_remaining = {

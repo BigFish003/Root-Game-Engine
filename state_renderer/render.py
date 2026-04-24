@@ -254,7 +254,11 @@ class state_renderer:
                 sec_right = sec_left + section_w
                 draw.line((sec_left, decree_rect[1], sec_left, decree_rect[3]), fill="black", width=1)
                 draw.text((sec_left + 3, decree_rect[1] + 3), category.capitalize(), fill="black", font=small_font)
-                symbols = [suit_symbol_from_card_id(v) for v in decree.get(category, [])]
+                decree_suits = public_data.get("decree_suits", {})
+                suited_entries = decree_suits.get(category)
+                if suited_entries is None:
+                    suited_entries = decree.get(category, [])
+                symbols = [suit_symbol_from_card_id(v) for v in suited_entries]
                 for s_idx, symbol in enumerate(symbols):
                     x = sec_left + 4 + (s_idx % 3) * 10
                     y = decree_rect[1] + 16 + (s_idx // 3) * 10
