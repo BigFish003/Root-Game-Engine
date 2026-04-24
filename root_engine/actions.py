@@ -82,3 +82,8 @@ class AddToDecree(Action):
 @dataclass(frozen=True)
 class FallIntoTurmoil(Action):
     """Resolve forced turmoil when decree cannot be completed."""
+
+
+@dataclass(frozen=True)
+class SelectEyrieLeader(Action):
+    leader: str

@@ -84,6 +84,7 @@ def _setup_starting_positions(state: GameState) -> None:
     state.eyrie.roosts_in_supply -= 1
     state.board.warriors[12][Faction.EYRIE] = 6
     state.eyrie.warriors_in_supply -= 6
+    _assign_eyrie_leader_viziers(state, state.eyrie.leader)
 
     # Vagabond opening (forest abstracted as clearing 12 adjacency anchor)
     state.vagabond.location = 12
@@ -95,3 +96,21 @@ def _deal_opening_hands(state: GameState, rng: random.Random) -> None:
         for _ in range(3):
             hand.append(state.draw_pile.pop())
         state.faction_state(faction).hand.extend(hand)
+
+
+def _assign_eyrie_leader_viziers(state: GameState, leader: str) -> None:
+    card_ids = _leader_vizier_card_ids()
+    mapping = {
+        "despot": ("move", "build"),
+        "commander": ("move", "battle"),
+        "charismatic": ("recruit", "battle"),
+        "builder": ("recruit", "move"),
+    }
+    for cards in state.eyrie.decree.values():
+        cards[:] = [card_id for card_id in cards if card_id > 0]
+    for column in mapping[leader]:
+        state.eyrie.decree[column].append(card_ids[column])
+
+
+def _leader_vizier_card_ids() -> dict[str, int]:
+    return {"recruit": -101, "move": -102, "battle": -103, "build": -104}

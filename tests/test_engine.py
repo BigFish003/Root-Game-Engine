@@ -9,6 +9,7 @@ from root_engine.actions import (
     EndPhase,
     FallIntoTurmoil,
     Recruit,
+    SelectEyrieLeader,
     SelectMoveDestination,
     SelectMoveSource,
 )
@@ -206,6 +207,7 @@ def test_eyrie_birdsong_can_add_cards_to_decree() -> None:
         engine.apply_action(EndPhase())
 
     state = engine.get_state()
+    assert not any(isinstance(action, EndPhase) for action in engine.get_valid_actions())
     card_id = state.eyrie.hand[0]
     add = next(
         action
@@ -215,6 +217,7 @@ def test_eyrie_birdsong_can_add_cards_to_decree() -> None:
     engine.apply_action(add)
     assert card_id in state.eyrie.decree["recruit"]
     assert card_id not in state.eyrie.hand
+    assert any(isinstance(action, EndPhase) for action in engine.get_valid_actions())
 
 
 def test_eyrie_daylight_craft_before_resolving_decree() -> None:
@@ -230,6 +233,7 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     state.eyrie.decree["recruit"] = [anvil]
     state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox roost for crafting
 
+    state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
     assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
     engine.apply_action(Craft(card_id=anvil))
@@ -255,6 +259,7 @@ def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     state.board.warriors[12][Faction.EYRIE] = 0
     state.eyrie.warriors_in_supply += 6
 
+    state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
     recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
     engine.apply_action(recruit)

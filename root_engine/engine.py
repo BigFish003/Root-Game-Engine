@@ -14,6 +14,7 @@ from .actions import (
     EndPhase,
     FallIntoTurmoil,
     Recruit,
+    SelectEyrieLeader,
     SelectBattleClearing,
     SelectBattleTarget,
     SelectMoveDestination,
@@ -127,3 +128,5 @@ class RootEngine:
             eyrie.apply_add_to_decree(self._state, action)
         elif isinstance(action, FallIntoTurmoil):
             eyrie.apply_fall_into_turmoil(self._state, action)
+        elif isinstance(action, SelectEyrieLeader):
+            eyrie.apply_select_leader(self._state, action)

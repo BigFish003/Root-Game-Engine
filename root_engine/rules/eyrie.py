@@ -10,6 +10,7 @@ from ..actions import (
     EndPhase,
     FallIntoTurmoil,
     Recruit,
+    SelectEyrieLeader,
     SelectBattleClearing,
     SelectBattleTarget,
     SelectMoveDestination,
@@ -23,11 +24,16 @@ from .movement import legal_move_destinations, legal_move_sources
 
 
 def valid_actions(state: GameState) -> list:
+    if state.eyrie.pending_leader_selection:
+        return [SelectEyrieLeader(leader) for leader in _available_leaders(state)]
     if state.turn.phase == Phase.BIRDSONG:
-        actions: list = [EndPhase()]
-        for card_id in state.eyrie.hand:
-            for column in ["recruit", "move", "battle", "build"]:
-                actions.append(AddToDecree(card_id=card_id, column=column))
+        actions: list = []
+        if state.eyrie.birdsong_cards_added < 2:
+            for card_id in state.eyrie.hand:
+                for column in ["recruit", "move", "battle", "build"]:
+                    actions.append(AddToDecree(card_id=card_id, column=column))
+        if state.eyrie.birdsong_cards_added >= 1 or not state.eyrie.hand:
+            actions.append(EndPhase())
         return actions
     if state.turn.phase != Phase.DAYLIGHT:
         return [EndPhase()]
@@ -62,8 +68,8 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if state.eyrie.warriors_in_supply <= 0:
         raise ValueError("No Eyrie warriors in supply")
-    state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
-    state.eyrie.warriors_in_supply -= 1
+    state.board.warriors[action.clearing_id][Faction.EYRIE] += warriors_to_place
+    state.eyrie.warriors_in_supply -= warriors_to_place
     _consume_decree_card(state, "recruit", state.board.clearings[action.clearing_id].suit)
 
 
@@ -110,7 +116,14 @@ def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> 
     if clearing is None:
         raise ValueError("No battle clearing selected")
     target = Faction(action.target_faction)
-    resolve_basic_battle(state, Faction.EYRIE, target, clearing)
+    resolve_basic_battle(
+        state,
+        Faction.EYRIE,
+        target,
+        clearing,
+        attacker_extra_hits=1 if state.eyrie.leader == "commander" else 0,
+        despot_bonus=state.eyrie.leader == "despot",
+    )
     _consume_decree_card(state, "battle", state.board.clearings[clearing].suit)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_battle_clearing = None
@@ -142,19 +155,34 @@ def apply_add_to_decree(state: GameState, action: AddToDecree) -> None:
         raise ValueError("Card not in hand")
     if action.column not in state.eyrie.decree:
         raise ValueError("Invalid decree column")
+    if state.eyrie.birdsong_cards_added >= 2:
+        raise ValueError("Eyrie can add at most 2 cards to decree in birdsong")
     state.eyrie.hand.remove(action.card_id)
     state.eyrie.decree[action.column].append(action.card_id)
+    state.eyrie.birdsong_cards_added += 1
 
 
 def apply_fall_into_turmoil(state: GameState, action: FallIntoTurmoil) -> None:
     del action
+    if state.eyrie.leader not in state.eyrie.turmoiled_leaders:
+        state.eyrie.turmoiled_leaders.append(state.eyrie.leader)
     for cards in state.eyrie.decree.values():
-        state.discard_pile.extend(cards)
+        state.discard_pile.extend(card_id for card_id in cards if card_id > 0)
         cards.clear()
     state.eyrie.decree_cards_remaining = {key: [] for key in state.eyrie.decree}
     state.eyrie.crafting_window_open = False
     state.eyrie.resolving_decree = False
     state.eyrie.decree_column_index = 0
+    state.eyrie.pending_leader_selection = True
+
+
+def apply_select_leader(state: GameState, action: SelectEyrieLeader) -> None:
+    available = _available_leaders(state)
+    if action.leader not in available:
+        raise ValueError("Leader is not available to turmoil into")
+    state.eyrie.leader = action.leader
+    _assign_leader_viziers(state, action.leader)
+    state.eyrie.pending_leader_selection = False
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
@@ -200,6 +228,8 @@ def _current_decree_actions(state: GameState) -> list:
 
 
 def _card_suit(state: GameState, card_id: int) -> Suit:
+    if card_id < 0:
+        return Suit.BIRD
     return state.cards[card_id].suit
 
 
@@ -214,13 +244,13 @@ def _consume_decree_card(state: GameState, column: str, clearing_suit: Suit) -> 
         state.eyrie.crafting_window_open = False
     remaining = state.eyrie.decree_cards_remaining[column]
     for idx, card_id in enumerate(remaining):
-        suit = state.cards[card_id].suit
+        suit = _card_suit(state, card_id)
         if suit == clearing_suit:
             remaining.pop(idx)
             _advance_decree_column(state)
             return
     for idx, card_id in enumerate(remaining):
-        if state.cards[card_id].suit == Suit.BIRD:
+        if _card_suit(state, card_id) == Suit.BIRD:
             remaining.pop(idx)
             _advance_decree_column(state)
             return
@@ -270,3 +300,24 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
         state.board.tokens[cid][Faction.ALLIANCE] = [
             token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
         ]
+
+
+def _assign_leader_viziers(state: GameState, leader: str) -> None:
+    vizier_card_ids = {"recruit": -101, "move": -102, "battle": -103, "build": -104}
+    mapping = {
+        "despot": ("move", "build"),
+        "commander": ("move", "battle"),
+        "charismatic": ("recruit", "battle"),
+        "builder": ("recruit", "move"),
+    }
+    for cards in state.eyrie.decree.values():
+        cards[:] = [card_id for card_id in cards if card_id > 0]
+    for column in mapping[leader]:
+        state.eyrie.decree[column].append(vizier_card_ids[column])
+
+
+def _available_leaders(state: GameState) -> list[str]:
+    all_leaders = ["despot", "commander", "charismatic", "builder"]
+    if len(state.eyrie.turmoiled_leaders) >= len(all_leaders):
+        state.eyrie.turmoiled_leaders.clear()
+    return [leader for leader in all_leaders if leader not in state.eyrie.turmoiled_leaders]
