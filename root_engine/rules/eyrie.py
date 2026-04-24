@@ -68,8 +68,8 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if state.eyrie.warriors_in_supply <= 0:
         raise ValueError("No Eyrie warriors in supply")
-    state.board.warriors[action.clearing_id][Faction.EYRIE] += warriors_to_place
-    state.eyrie.warriors_in_supply -= warriors_to_place
+    state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
+    state.eyrie.warriors_in_supply -= 1
     _consume_decree_card(state, "recruit", state.board.clearings[action.clearing_id].suit)
 
 

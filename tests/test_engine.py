@@ -304,6 +304,23 @@ def test_keep_blocks_non_marquise_piece_placement() -> None:
         eyrie_rules.apply_recruit(state, Recruit(clearing_id=keep))
 
 
+def test_eyrie_recruit_places_one_warrior_and_spends_supply() -> None:
+    engine = RootEngine(seed=57)
+    state = engine.get_state()
+    target = next(
+        cid
+        for cid, buildings in state.board.buildings.items()
+        if any(b == BuildingType.ROOST for b in buildings[Faction.EYRIE]) and cid != state.marquise.keep_clearing
+    )
+    before_board = state.board.warriors[target][Faction.EYRIE]
+    before_supply = state.eyrie.warriors_in_supply
+
+    eyrie_rules.apply_recruit(state, Recruit(clearing_id=target))
+
+    assert state.board.warriors[target][Faction.EYRIE] == before_board + 1
+    assert state.eyrie.warriors_in_supply == before_supply - 1
+
+
 def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep() -> None:
     engine = RootEngine(seed=59)
     state = engine.get_state()
