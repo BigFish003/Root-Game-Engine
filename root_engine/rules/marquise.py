@@ -19,6 +19,7 @@ from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards, spend_marquise_crafting_power
 from .movement import legal_move_destinations, legal_move_sources
+from .rulership import rules_clearing
 
 
 def valid_actions(state: GameState) -> list:
@@ -204,19 +205,7 @@ def _marquise_build_score(state: GameState, building_type: BuildingType) -> int:
 
 
 def _marquise_rules_clearing(state: GameState, clearing_id: int) -> bool:
-    marq_power = (
-        state.board.warriors[clearing_id][Faction.MARQUISE]
-        + len(state.board.buildings[clearing_id][Faction.MARQUISE])
-    )
-    eyrie_power = (
-        state.board.warriors[clearing_id][Faction.EYRIE]
-        + len(state.board.buildings[clearing_id][Faction.EYRIE])
-    )
-    alliance_power = (
-        state.board.warriors[clearing_id][Faction.ALLIANCE]
-        + len(state.board.buildings[clearing_id][Faction.ALLIANCE])
-    )
-    return marq_power > max(eyrie_power, alliance_power)
+    return rules_clearing(state, clearing_id, Faction.MARQUISE)
 
 
 def _reachable_ruled_clearings(state: GameState, origin: int) -> set[int]:

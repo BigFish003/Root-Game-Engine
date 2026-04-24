@@ -64,8 +64,9 @@ def valid_actions(state: GameState) -> list:
 
 
 def apply_recruit(state: GameState, action: Recruit) -> None:
-    warriors_to_place = 2 if state.eyrie.leader == "charismatic" else 1
-    if state.eyrie.warriors_in_supply < warriors_to_place:
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
+    if state.eyrie.warriors_in_supply <= 0:
         raise ValueError("No Eyrie warriors in supply")
     state.board.warriors[action.clearing_id][Faction.EYRIE] += warriors_to_place
     state.eyrie.warriors_in_supply -= warriors_to_place
@@ -73,6 +74,8 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
 
 
 def apply_build(state: GameState, action: Build) -> None:
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if action.building_type != BuildingType.ROOST:
         raise ValueError("Eyrie can only build roosts")
     if state.eyrie.roosts_in_supply <= 0:
@@ -135,7 +138,9 @@ def apply_craft(state: GameState, action: Craft) -> None:
         raise ValueError("Crafting is only available before decree resolution")
     card = state.cards[action.card_id]
     state.eyrie.hand.remove(action.card_id)
-    if card.vp_on_craft > 0:
+    if CardTag.ITEM in card.tags:
+        state.scores[Faction.EYRIE] += 1
+    elif card.vp_on_craft > 0:
         state.scores[Faction.EYRIE] += card.vp_on_craft
     if card.name.startswith("Favor of the"):
         _resolve_favor(state, card.suit)

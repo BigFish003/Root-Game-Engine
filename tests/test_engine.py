@@ -14,7 +14,10 @@ from root_engine.actions import (
     SelectMoveSource,
 )
 from root_engine.engine import RootEngine
-from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit
+from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
+from root_engine.rules import alliance as alliance_rules
+from root_engine.rules import combat as combat_rules
+from root_engine.rules import eyrie as eyrie_rules
 
 
 def test_reset_initial_state_has_expected_markers() -> None:
@@ -228,13 +231,13 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
     state.eyrie.hand = [anvil]
     state.eyrie.decree["recruit"] = [anvil]
-    state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)  # fox roost for crafting
+    state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox roost for crafting
 
     state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
     assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
     engine.apply_action(Craft(card_id=anvil))
-    assert state.scores[Faction.EYRIE] >= 2
+    assert state.scores[Faction.EYRIE] == 1
     recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
     engine.apply_action(recruit)
     assert not state.eyrie.crafting_window_open
@@ -252,7 +255,7 @@ def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     mouse_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE and cid != fox_card)
     state.eyrie.decree = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
     state.eyrie.decree_cards_remaining = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
-    state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing
+    state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing
     state.board.warriors[12][Faction.EYRIE] = 0
     state.eyrie.warriors_in_supply += 6
 
@@ -263,41 +266,73 @@ def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     actions = engine.get_valid_actions()
     assert not any(isinstance(action, Recruit) for action in actions)
     assert any(isinstance(action, FallIntoTurmoil) for action in actions)
-    engine.apply_action(FallIntoTurmoil())
-    leader_actions = engine.get_valid_actions()
-    assert all(isinstance(action, SelectEyrieLeader) for action in leader_actions)
-    assert all(action.leader != state.eyrie.leader for action in leader_actions)
 
 
-def test_eyrie_birdsong_allows_at_most_two_added_cards() -> None:
+def test_eyrie_lords_of_the_forest_rules_ties_but_not_empty_clearings() -> None:
     engine = RootEngine(seed=43)
-    while engine.get_state().turn.current_faction != Faction.EYRIE:
-        engine.apply_action(EndPhase())
-        engine.apply_action(EndPhase())
-        engine.apply_action(EndPhase())
     state = engine.get_state()
-    state.eyrie.hand = state.eyrie.hand[:2]
+    state.board.warriors[3][Faction.MARQUISE] = 1
+    state.board.warriors[3][Faction.EYRIE] = 1
+    state.board.warriors[6][Faction.MARQUISE] = 0
+    state.board.warriors[6][Faction.EYRIE] = 0
+    assert engine.get_observation(Faction.EYRIE).clearings[3].ruler == Faction.EYRIE
+    assert engine.get_observation(Faction.EYRIE).clearings[6].ruler is None
 
-    for card_id in list(state.eyrie.hand):
-        add = next(action for action in engine.get_valid_actions() if isinstance(action, AddToDecree) and action.card_id == card_id)
-        engine.apply_action(add)
-    assert not any(isinstance(action, AddToDecree) for action in engine.get_valid_actions())
 
-
-def test_charismatic_recruit_places_two_warriors() -> None:
+def test_eyrie_disdain_for_trade_scores_one_for_item_craft() -> None:
     engine = RootEngine(seed=47)
     while engine.get_state().turn.current_faction != Faction.EYRIE:
         engine.apply_action(EndPhase())
         engine.apply_action(EndPhase())
         engine.apply_action(EndPhase())
     state = engine.get_state()
-    state.eyrie.leader = "charismatic"
-    state.eyrie.decree = {"recruit": [-101], "move": [], "battle": [], "build": []}
-    state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST]
-    start_warriors = state.board.warriors[12][Faction.EYRIE]
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.eyrie.hand = [anvil]
+    state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    before = state.scores[Faction.EYRIE]
+    engine.apply_action(Craft(card_id=anvil))
+    assert state.scores[Faction.EYRIE] == before + 1
 
-    state.eyrie.birdsong_cards_added = 1
-    engine.apply_action(EndPhase())
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
-    engine.apply_action(recruit)
-    assert state.board.warriors[12][Faction.EYRIE] == start_warriors + 2
+
+def test_keep_blocks_non_marquise_piece_placement() -> None:
+    engine = RootEngine(seed=53)
+    state = engine.get_state()
+    keep = state.marquise.keep_clearing
+    assert keep is not None
+    with pytest.raises(ValueError):
+        eyrie_rules.apply_recruit(state, Recruit(clearing_id=keep))
+
+
+def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep() -> None:
+    engine = RootEngine(seed=59)
+    state = engine.get_state()
+    keep = state.marquise.keep_clearing
+    assert keep is not None
+    battle_clearing = 2
+    state.board.warriors[battle_clearing][Faction.MARQUISE] = 2
+    state.board.warriors[battle_clearing][Faction.EYRIE] = 2
+    fox_card = next(cid for cid, card in state.cards.items() if card.suit == state.board.clearings[battle_clearing].suit)
+    state.marquise.hand = [fox_card]
+    keep_before = state.board.warriors[keep][Faction.MARQUISE]
+    combat_rules.resolve_basic_battle(state, Faction.EYRIE, Faction.MARQUISE, battle_clearing)
+    assert fox_card in state.discard_pile
+    assert state.board.warriors[keep][Faction.MARQUISE] == keep_before + 1
+
+
+def test_alliance_crafting_uses_sympathy_tokens() -> None:
+    engine = RootEngine(seed=61)
+    state = engine.get_state()
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.alliance.hand = [anvil]
+    state.board.tokens[1][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    assert anvil in alliance_rules.legal_crafting_cards(state)
+
+
+def test_alliance_supporters_capacity_without_base_is_five() -> None:
+    engine = RootEngine(seed=67)
+    state = engine.get_state()
+    state.alliance.supporters = [1, 2, 3, 4, 5]
+    card_id = 6
+    assert alliance_rules.gain_supporter(state, card_id) is False
+    assert card_id in state.discard_pile

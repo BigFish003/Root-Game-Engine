@@ -53,24 +53,45 @@ def resolve_basic_battle(
     despot_bonus: bool = False,
 ) -> None:
     """Simplified deterministic battle: each side loses one warrior if available."""
+    attacker_hits, defender_hits = _battle_hits(attacker, defender)
 
-    removed_cardboard = False
-    attacker_hits = 1 + attacker_extra_hits
-    for _ in range(attacker_hits):
-        if state.board.warriors[clearing_id][defender] > 0:
-            state.board.warriors[clearing_id][defender] -= 1
-            state.scores[attacker] += 1
-            continue
-        if state.board.buildings[clearing_id][defender]:
-            state.board.buildings[clearing_id][defender].pop()
-            removed_cardboard = True
-            continue
-        if state.board.tokens[clearing_id][defender]:
-            state.board.tokens[clearing_id][defender].pop()
-            removed_cardboard = True
-            continue
-        break
-    if despot_bonus and removed_cardboard:
-        state.scores[attacker] += 1
-    if state.board.warriors[clearing_id][attacker] > 0:
-        state.board.warriors[clearing_id][attacker] -= 1
+    defender_losses = min(attacker_hits, state.board.warriors[clearing_id][defender])
+    attacker_losses = min(defender_hits, state.board.warriors[clearing_id][attacker])
+
+    if defender_losses > 0:
+        state.board.warriors[clearing_id][defender] -= defender_losses
+        state.scores[attacker] += defender_losses
+    if attacker_losses > 0:
+        state.board.warriors[clearing_id][attacker] -= attacker_losses
+    _apply_field_hospitals(state, clearing_id, defender, defender_losses)
+    _apply_field_hospitals(state, clearing_id, attacker, attacker_losses)
+
+
+def _battle_hits(attacker: Faction, defender: Faction) -> tuple[int, int]:
+    """Return attacker and defender hit counts for simplified battle."""
+
+    attacker_roll = 1
+    defender_roll = 1
+    if defender == Faction.ALLIANCE:
+        return max(attacker_roll, defender_roll), min(attacker_roll, defender_roll)
+    return attacker_roll, defender_roll
+
+
+def _apply_field_hospitals(
+    state: GameState,
+    clearing_id: int,
+    faction_with_losses: Faction,
+    losses: int,
+) -> None:
+    if faction_with_losses != Faction.MARQUISE or losses <= 0:
+        return
+    keep = state.marquise.keep_clearing
+    if keep is None:
+        return
+    clearing_suit = state.board.clearings[clearing_id].suit
+    matching = [card_id for card_id in state.marquise.hand if state.cards[card_id].suit == clearing_suit]
+    if not matching:
+        return
+    state.marquise.hand.remove(matching[0])
+    state.discard_pile.append(matching[0])
+    state.board.warriors[keep][Faction.MARQUISE] += losses
