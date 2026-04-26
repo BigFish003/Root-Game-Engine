@@ -229,8 +229,18 @@ def _marquise_build_cost(state: GameState, building_type: BuildingType) -> int:
 
 
 def _marquise_build_score(state: GameState, building_type: BuildingType) -> int:
-    placed = 6 - state.marquise.buildings_in_supply[building_type]
-    return [0, 1, 2, 3, 4, 5][placed]
+    built_count = 6 - state.marquise.buildings_in_supply[building_type]
+    return [0, 1, 2, 3, 4, 5][built_count - 1]
+
+
+def recruiter_draw_bonus(state: GameState) -> int:
+    recruiters_built = 6 - state.marquise.buildings_in_supply[BuildingType.RECRUITER]
+    bonus = 0
+    if recruiters_built >= 3:
+        bonus += 1
+    if recruiters_built >= 5:
+        bonus += 1
+    return bonus
 
 
 def _marquise_rules_clearing(state: GameState, clearing_id: int) -> bool:
