@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..enums import BuildingType, DecisionType, Faction, Phase, TokenType
 from ..models import GameState
 from .crafting import initialize_marquise_crafting_power
-from .eyrie import roost_draw_bonus
+from .eyrie import roost_draw_bonus, roost_points_for_evening
 from .marquise import recruiter_draw_bonus
 
 
@@ -72,6 +72,7 @@ def _resolve_evening_effects(state: GameState) -> None:
     if state.turn.current_faction == Faction.MARQUISE:
         draw_count += recruiter_draw_bonus(state)
     elif state.turn.current_faction == Faction.EYRIE:
+        state.scores[Faction.EYRIE] += roost_points_for_evening(state)
         draw_count += roost_draw_bonus(state)
     elif state.turn.current_faction == Faction.ALLIANCE:
         draw_count += sum(1 for built in state.alliance.bases.values() if built)
