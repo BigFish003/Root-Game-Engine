@@ -39,6 +39,8 @@ def test_renderer_renders_full_state_and_observation() -> None:
     assert "hand=[" in full
     assert "Observer: marquise" in partial
     assert "hidden(count=" in partial
+    assert "Observer private info:" in partial
+    assert "supporters:" not in partial
 
 
 def test_visual_renderer_outputs_svg_and_respects_hidden_hands() -> None:
@@ -54,6 +56,19 @@ def test_visual_renderer_outputs_svg_and_respects_hidden_hands() -> None:
     assert "hidden(" not in full_svg
     assert "Observer: marquise" in obs_svg
     assert "hidden(" in obs_svg
+    assert "Observer view" in obs_svg
+
+
+def test_renderer_shows_alliance_supporters_only_for_alliance_observer() -> None:
+    engine = RootEngine(seed=144)
+    engine.get_state().alliance.supporters = [1, 2, 3]
+    renderer = RootRenderer()
+
+    marquise_view = renderer.render(engine.get_observation(Faction.MARQUISE))
+    alliance_view = renderer.render(engine.get_observation(Faction.ALLIANCE))
+
+    assert "supporters:" not in marquise_view
+    assert "supporters: [1, 2, 3]" in alliance_view
 
 
 def test_eyrie_observation_exposes_decree_suits() -> None:

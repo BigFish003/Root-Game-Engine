@@ -39,4 +39,20 @@ class RootRenderer:
                 else f"hidden(count={board.hand_count})"
             )
             lines.append(f"- {faction.value}: score={board.score} hand={hand_view}")
+        lines.extend(self._render_observer_private_lines(obs))
         return "\n".join(lines)
+
+    def render_observer_private(self, obs: Observation) -> str:
+        """Render private observation details for the requesting faction only."""
+
+        return "\n".join(self._render_observer_private_lines(obs))
+
+    def _render_observer_private_lines(self, obs: Observation) -> list[str]:
+        board = obs.factions[obs.observer]
+        lines = [
+            "Observer private info:",
+            f"- hand: {board.hand if board.hand is not None else []}",
+        ]
+        if "supporters" in board.private_data:
+            lines.append(f"- supporters: {board.private_data['supporters']}")
+        return lines
