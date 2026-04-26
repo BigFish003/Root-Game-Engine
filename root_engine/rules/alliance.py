@@ -187,14 +187,22 @@ def _alliance_warriors_in_supply(state: GameState) -> int:
 
 
 def _sympathy_supporter_cost(state: GameState) -> int:
-    tokens_on_map = 10 - state.alliance.sympathy_in_supply
+    tokens_on_map = _sympathy_tokens_on_map(state)
     track = [1, 2, 2, 3, 3, 3, 4, 4, 4, 4]
     idx = min(tokens_on_map, len(track) - 1)
     return track[idx]
 
 
 def _sympathy_vp_reward(state: GameState) -> int:
-    tokens_on_map = 10 - state.alliance.sympathy_in_supply
+    tokens_on_map = _sympathy_tokens_on_map(state)
     rewards = [0, 1, 1, 2, 2, 2, 3, 3, 4, 4]
     idx = min(tokens_on_map - 1, len(rewards) - 1)
     return rewards[max(idx, 0)]
+
+
+def _sympathy_tokens_on_map(state: GameState) -> int:
+    return sum(
+        1
+        for cid in state.board.clearings
+        if TokenType.SYMPATHY in state.board.tokens[cid][Faction.ALLIANCE]
+    )
