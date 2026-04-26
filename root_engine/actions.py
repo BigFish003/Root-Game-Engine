@@ -51,6 +51,7 @@ class SelectMoveSource(Action):
 @dataclass(frozen=True)
 class SelectMoveDestination(Action):
     clearing_id: int
+    warriors: int = 1
 
 
 @dataclass(frozen=True)

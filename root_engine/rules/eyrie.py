@@ -55,10 +55,13 @@ def valid_actions(state: GameState) -> list:
             actions.append(EndPhase())
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
-        return [
-            SelectMoveDestination(cid)
+        warriors_at_source = state.board.warriors[ctx.selected_source][Faction.EYRIE]
+        actions = [
+            SelectMoveDestination(clearing_id=cid, warriors=warriors_to_move)
             for cid in legal_move_destinations(state, Faction.EYRIE, ctx.selected_source)
-        ] + [EndDecision()]
+            for warriors_to_move in range(1, warriors_at_source + 1)
+        ]
+        return actions + [EndDecision()]
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)
@@ -105,10 +108,15 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     source = state.decision_context.selected_source
     if source is None:
         raise ValueError("No source selected")
-    if state.board.warriors[source][Faction.EYRIE] <= 0:
+    available_warriors = state.board.warriors[source][Faction.EYRIE]
+    if available_warriors <= 0:
         raise ValueError("No Eyrie warrior at source")
-    state.board.warriors[source][Faction.EYRIE] -= 1
-    state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
+    if action.warriors <= 0:
+        raise ValueError("Must move at least one Eyrie warrior")
+    if action.warriors > available_warriors:
+        raise ValueError("Cannot move more Eyrie warriors than are present")
+    state.board.warriors[source][Faction.EYRIE] -= action.warriors
+    state.board.warriors[action.clearing_id][Faction.EYRIE] += action.warriors
     alliance_rules.trigger_outrage(state, Faction.EYRIE, action.clearing_id)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     _consume_decree_card(state, "move", state.board.clearings[source].suit)
