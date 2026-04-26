@@ -28,6 +28,8 @@ def test_reset_initial_state_has_expected_markers() -> None:
     assert state.turn.phase == Phase.BIRDSONG
     assert state.marquise.keep_clearing == 1
     assert state.board.warriors[12][Faction.EYRIE] == 6
+    assert len(state.alliance.supporters) == 3
+    assert len(state.alliance.hand) == 0
 
 
 def test_valid_actions_non_empty_for_start_state() -> None:
