@@ -303,6 +303,8 @@ def _has_remaining_decree_cards(state: GameState) -> bool:
 
 
 def _ensure_decree_progress_initialized(state: GameState) -> None:
+    if state.eyrie.resolving_decree:
+        return
     if state.eyrie.decree_cards_remaining == {key: [] for key in state.eyrie.decree} and any(
         state.eyrie.decree.values()
     ):
