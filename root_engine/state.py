@@ -54,7 +54,7 @@ def create_initial_state(seed: Optional[int] = None) -> GameState:
         decision_context=DecisionContext(),
     )
     _setup_starting_positions(state)
-    _deal_opening_hands(state, rng)
+    _deal_opening_hands(state)
     return state
 
 
@@ -90,12 +90,13 @@ def _setup_starting_positions(state: GameState) -> None:
     state.vagabond.location = 12
 
 
-def _deal_opening_hands(state: GameState, rng: random.Random) -> None:
-    for faction in [Faction.MARQUISE, Faction.EYRIE, Faction.ALLIANCE, Faction.VAGABOND]:
-        hand = []
-        for _ in range(3):
-            hand.append(state.draw_pile.pop())
-        state.faction_state(faction).hand.extend(hand)
+def _deal_opening_hands(state: GameState) -> None:
+    for faction in [Faction.MARQUISE, Faction.EYRIE, Faction.VAGABOND]:
+        opening_hand = [state.draw_pile.pop() for _ in range(3)]
+        state.faction_state(faction).hand.extend(opening_hand)
+
+    # Woodland Alliance starts with supporters, not cards in hand.
+    state.alliance.supporters.extend(state.draw_pile.pop() for _ in range(3))
 
 
 def _assign_eyrie_leader_viziers(state: GameState, leader: str) -> None:
