@@ -193,16 +193,19 @@ class state_renderer:
                 return "bird"
             return normalize_suit_symbol(card_id)
 
-        def draw_suit_icon(symbol: str, x: int, y: int) -> None:
+        def draw_suit_icon(symbol: str, x: int, y: int, size: int = 12) -> None:
             if symbol == "fox":
-                img.paste(Fox, (x, y), Fox)
+                suit_icon = Fox.resize((size, size), Image.Resampling.LANCZOS)
+                img.paste(suit_icon, (x, y), suit_icon)
             elif symbol == "rabbit":
-                img.paste(Rabbit, (x, y), Rabbit)
+                suit_icon = Rabbit.resize((size, size), Image.Resampling.LANCZOS)
+                img.paste(suit_icon, (x, y), suit_icon)
             elif symbol == "mouse":
-                img.paste(Mouse, (x, y), Mouse)
+                suit_icon = Mouse.resize((size, size), Image.Resampling.LANCZOS)
+                img.paste(suit_icon, (x, y), suit_icon)
             else:
-                draw.ellipse((x, y, x + 8, y + 8), fill=(245, 245, 100), outline="black", width=1)
-                draw.text((x + 2, y - 1), "B", fill="black", font=small_font)
+                draw.ellipse((x, y, x + size, y + size), fill=(245, 245, 100), outline="black", width=1)
+                draw.text((x + size * 0.2, y + size * 0.05), "B", fill="black", font=small_font)
 
         def draw_marquise_board(board_rect: tuple[int, int, int, int]) -> None:
             draw_faction_header(board_rect, "Marquise de Cat", (168, 98, 24))
@@ -503,7 +506,7 @@ class state_renderer:
             label_h = label_bbox[3] - label_bbox[1]
             draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
             clearing_suit = normalize_suit_symbol(clearing_data.get("suit", "bird"))
-            draw_suit_icon(clearing_suit, cx + radius - 2, cy + radius - 2)
+            draw_suit_icon(clearing_suit, cx + radius - 12, cy + radius - 12, size=14)
 
             slots = int(clearing_data.get("building_slots", 0))
             if slots > 0:
