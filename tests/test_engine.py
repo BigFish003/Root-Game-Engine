@@ -83,18 +83,33 @@ def test_atomic_move_selection_changes_context_and_board() -> None:
     engine.apply_action(EndPhase())
 
     select_source = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource))
-    src = select_source.clearing_id
-    src_before = engine.get_state().board.warriors[src][Faction.MARQUISE]
+    src1 = select_source.clearing_id
+    src1_before = engine.get_state().board.warriors[src1][Faction.MARQUISE]
+    actions_before = engine.get_state().marquise.daylight_actions_used
     engine.apply_action(select_source)
 
     assert engine.get_state().decision_context.decision_type == DecisionType.SELECT_MOVE_DESTINATION
-    dest_action = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination))
-    dest = dest_action.clearing_id
-    dest_before = engine.get_state().board.warriors[dest][Faction.MARQUISE]
+    first_dest_action = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination))
+    dest1 = first_dest_action.clearing_id
+    dest1_before = engine.get_state().board.warriors[dest1][Faction.MARQUISE]
 
-    engine.apply_action(dest_action)
-    assert engine.get_state().board.warriors[src][Faction.MARQUISE] == src_before - 1
-    assert engine.get_state().board.warriors[dest][Faction.MARQUISE] == dest_before + 1
+    engine.apply_action(first_dest_action)
+    assert engine.get_state().board.warriors[src1][Faction.MARQUISE] == src1_before - 1
+    assert engine.get_state().board.warriors[dest1][Faction.MARQUISE] == dest1_before + 1
+    assert engine.get_state().marquise.daylight_actions_used == actions_before
+
+    second_source = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource))
+    src2 = second_source.clearing_id
+    src2_before = engine.get_state().board.warriors[src2][Faction.MARQUISE]
+    engine.apply_action(second_source)
+    second_dest_action = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination))
+    dest2 = second_dest_action.clearing_id
+    dest2_before = engine.get_state().board.warriors[dest2][Faction.MARQUISE]
+    engine.apply_action(second_dest_action)
+
+    assert engine.get_state().board.warriors[src2][Faction.MARQUISE] == src2_before - 1
+    assert engine.get_state().board.warriors[dest2][Faction.MARQUISE] == dest2_before + 1
+    assert engine.get_state().marquise.daylight_actions_used == actions_before + 1
     assert engine.get_state().decision_context.decision_type == DecisionType.MAIN_ACTION
 
 

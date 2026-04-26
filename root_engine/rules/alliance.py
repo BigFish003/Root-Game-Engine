@@ -53,7 +53,10 @@ def valid_actions(state: GameState) -> list:
         actions.extend(Organize(clearing_id=cid) for cid in _legal_organize_clearings(state))
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
-        return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
+        return [
+            SelectMoveDestination(cid)
+            for cid in legal_move_destinations(state, Faction.ALLIANCE, ctx.selected_source)
+        ] + [EndDecision()]
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)

@@ -30,6 +30,13 @@ def valid_actions(state: GameState) -> list:
         return [EndPhase()]
 
     ctx = state.decision_context
+    if ctx.pending_moves_remaining > 0:
+        if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
+            return [
+                SelectMoveDestination(cid)
+                for cid in legal_move_destinations(state, Faction.MARQUISE, ctx.selected_source)
+            ]
+        return [SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE)]
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]
         if state.marquise.crafting_window_open:
@@ -48,7 +55,10 @@ def valid_actions(state: GameState) -> list:
         actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.MARQUISE))
         return actions
     if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
-        return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
+        return [
+            SelectMoveDestination(cid)
+            for cid in legal_move_destinations(state, Faction.MARQUISE, ctx.selected_source)
+        ] + [EndDecision()]
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)
@@ -97,6 +107,8 @@ def apply_build(state: GameState, action: Build) -> None:
 
 
 def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
+    if state.decision_context.pending_moves_remaining == 0:
+        state.decision_context.pending_moves_remaining = 2
     state.decision_context.decision_type = DecisionType.SELECT_MOVE_DESTINATION
     state.decision_context.selected_source = action.clearing_id
 
@@ -110,10 +122,20 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.board.warriors[source][Faction.MARQUISE] -= 1
     state.board.warriors[action.clearing_id][Faction.MARQUISE] += 1
     alliance_rules.trigger_outrage(state, Faction.MARQUISE, action.clearing_id)
-    state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    state.decision_context.pending_moves_remaining -= 1
     state.decision_context.selected_source = None
-    state.marquise.daylight_actions_used += 1
-    state.marquise.crafting_window_open = False
+    if state.decision_context.pending_moves_remaining <= 0:
+        state.decision_context.decision_type = DecisionType.MAIN_ACTION
+        state.decision_context.pending_moves_remaining = 0
+        state.marquise.daylight_actions_used += 1
+        state.marquise.crafting_window_open = False
+    elif legal_move_sources(state, Faction.MARQUISE):
+        state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    else:
+        state.decision_context.decision_type = DecisionType.MAIN_ACTION
+        state.decision_context.pending_moves_remaining = 0
+        state.marquise.daylight_actions_used += 1
+        state.marquise.crafting_window_open = False
 
 
 def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
