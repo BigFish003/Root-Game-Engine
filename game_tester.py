@@ -16,6 +16,7 @@ r = True
 
 for i in range(len(actions)):
     valid_actions = engine.get_valid_actions()
+    print(len(valid_actions))
     engine.apply_action(valid_actions[actions[i]])
     if r:
         obs = engine.get_observation(Faction.ALLIANCE)
