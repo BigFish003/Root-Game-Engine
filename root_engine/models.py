@@ -116,6 +116,8 @@ class AllianceState:
     sympathy_in_supply: int = 10
     hand: list[int] = field(default_factory=list)
     crafted_effects: list[str] = field(default_factory=list)
+    military_ops_used: int = 0
+    crafting_window_open: bool = False
 
 
 @dataclass

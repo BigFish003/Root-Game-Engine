@@ -59,11 +59,17 @@ def _on_daylight_start(state: GameState) -> None:
         state.eyrie.decree_cards_remaining = {
             key: list(cards) for key, cards in state.eyrie.decree.items()
         }
+    elif state.turn.current_faction == Faction.ALLIANCE:
+        state.alliance.crafting_window_open = True
+        state.alliance.military_ops_used = 0
 
 
 def _resolve_evening_effects(state: GameState) -> None:
     faction_state = state.faction_state(state.turn.current_faction)
-    _draw_cards(state, faction_state.hand, 1)
+    draw_count = 1
+    if state.turn.current_faction == Faction.ALLIANCE:
+        draw_count += sum(1 for built in state.alliance.bases.values() if built)
+    _draw_cards(state, faction_state.hand, draw_count)
     while len(faction_state.hand) > 5:
         state.discard_pile.append(faction_state.hand.pop())
 

@@ -1,22 +1,168 @@
-"""Woodland Alliance legal action generation and birdsong actions."""
+"""Woodland Alliance legal action generation and action resolution."""
 
 from __future__ import annotations
 
-from ..actions import EndPhase, Revolt, SpreadSympathy
-from ..enums import BuildingType, Faction, Phase, Suit, TokenType
+from ..actions import (
+    Craft,
+    EndDecision,
+    EndPhase,
+    Mobilize,
+    Organize,
+    Recruit,
+    Revolt,
+    SelectBattleClearing,
+    SelectBattleTarget,
+    SelectMoveDestination,
+    SelectMoveSource,
+    SpreadSympathy,
+    Train,
+)
+from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
+from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
+from .crafting import legal_craft_cards
+from .movement import legal_move_destinations, legal_move_sources
 
 
 def valid_actions(state: GameState) -> list:
-    """Generate Alliance actions, with full Birdsong Revolt/Spread Sympathy."""
+    """Generate Alliance legal actions for all phases."""
 
-    if state.turn.phase != Phase.BIRDSONG:
+    if state.turn.phase == Phase.BIRDSONG:
+        actions: list = []
+        actions.extend(Revolt(clearing_id=cid) for cid in _legal_revolt_clearings(state))
+        actions.extend(SpreadSympathy(clearing_id=cid) for cid in _legal_sympathy_clearings(state))
+        actions.append(EndPhase())
+        return actions
+
+    if state.turn.phase == Phase.DAYLIGHT:
+        actions: list = [EndPhase()]
+        if state.alliance.crafting_window_open:
+            actions.extend(Craft(card_id) for card_id in legal_crafting_cards(state))
+        actions.extend(Mobilize(card_id=card_id) for card_id in state.alliance.hand)
+        actions.extend(Train(card_id=card_id) for card_id in _legal_train_cards(state))
+        return actions
+
+    ctx = state.decision_context
+    if state.alliance.military_ops_used >= state.alliance.officers:
         return [EndPhase()]
-    actions: list = []
-    actions.extend(Revolt(clearing_id=cid) for cid in _legal_revolt_clearings(state))
-    actions.extend(SpreadSympathy(clearing_id=cid) for cid in _legal_sympathy_clearings(state))
-    actions.append(EndPhase())
-    return actions
+    if ctx.decision_type == DecisionType.MAIN_ACTION:
+        actions = [EndPhase()]
+        actions.extend(SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.ALLIANCE))
+        actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.ALLIANCE))
+        actions.extend(Recruit(clearing_id=cid) for cid in _legal_evening_recruit_clearings(state))
+        actions.extend(Organize(clearing_id=cid) for cid in _legal_organize_clearings(state))
+        return actions
+    if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
+        return [SelectMoveDestination(cid) for cid in legal_move_destinations(state, ctx.selected_source)] + [EndDecision()]
+    if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
+        return [
+            SelectBattleTarget(f.value)
+            for f in legal_battle_targets(state, Faction.ALLIANCE, ctx.selected_battle_clearing)
+        ] + [EndDecision()]
+    return [EndDecision()]
+
+
+def apply_craft(state: GameState, action: Craft) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Craft can only be taken in Daylight")
+    if action.card_id not in state.alliance.hand:
+        raise ValueError("Card not in hand")
+    if action.card_id not in legal_crafting_cards(state):
+        raise ValueError("Card cannot be crafted with available sympathy")
+    if not state.alliance.crafting_window_open:
+        raise ValueError("Crafting is only available at the start of Daylight")
+    card = state.cards[action.card_id]
+    state.alliance.hand.remove(action.card_id)
+    if card.vp_on_craft > 0:
+        state.scores[Faction.ALLIANCE] += card.vp_on_craft
+    if card.name.startswith("Favor of the"):
+        _resolve_favor(state, card.suit)
+    if CardTag.PERSISTENT_EFFECT in card.tags:
+        state.alliance.crafted_effects.append(card.name)
+    else:
+        state.discard_pile.append(action.card_id)
+
+
+def apply_mobilize(state: GameState, action: Mobilize) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Mobilize can only be taken in Daylight")
+    if action.card_id not in state.alliance.hand:
+        raise ValueError("Card not in hand")
+    state.alliance.hand.remove(action.card_id)
+    gain_supporter(state, action.card_id)
+    state.alliance.crafting_window_open = False
+
+
+def apply_train(state: GameState, action: Train) -> None:
+    if state.turn.phase != Phase.DAYLIGHT:
+        raise ValueError("Train can only be taken in Daylight")
+    if action.card_id not in state.alliance.hand:
+        raise ValueError("Card not in hand")
+    if action.card_id not in _legal_train_cards(state):
+        raise ValueError("Train card suit must match a built base")
+    if _alliance_warriors_in_supply(state) <= 0:
+        raise ValueError("No Alliance warriors in supply to train")
+    state.alliance.hand.remove(action.card_id)
+    state.discard_pile.append(action.card_id)
+    state.alliance.officers += 1
+    state.alliance.crafting_window_open = False
+
+
+def apply_move_source(state: GameState, action: SelectMoveSource) -> None:
+    state.decision_context.decision_type = DecisionType.SELECT_MOVE_DESTINATION
+    state.decision_context.selected_source = action.clearing_id
+
+
+def apply_move_destination(state: GameState, action: SelectMoveDestination) -> None:
+    source = state.decision_context.selected_source
+    if source is None:
+        raise ValueError("No selected source for move")
+    if state.board.warriors[source][Faction.ALLIANCE] <= 0:
+        raise ValueError("No Alliance warrior at source")
+    state.board.warriors[source][Faction.ALLIANCE] -= 1
+    state.board.warriors[action.clearing_id][Faction.ALLIANCE] += 1
+    state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    state.decision_context.selected_source = None
+    _use_military_operation(state)
+
+
+def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
+    state.decision_context.decision_type = DecisionType.SELECT_BATTLE_TARGET
+    state.decision_context.selected_battle_clearing = action.clearing_id
+
+
+def apply_battle_select_target(state: GameState, action: SelectBattleTarget) -> None:
+    clearing = state.decision_context.selected_battle_clearing
+    if clearing is None:
+        raise ValueError("No battle clearing selected")
+    target = Faction(action.target_faction)
+    resolve_basic_battle(state, Faction.ALLIANCE, target, clearing)
+    state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    state.decision_context.selected_battle_clearing = None
+    _use_military_operation(state)
+
+
+def apply_recruit(state: GameState, action: Recruit) -> None:
+    if state.turn.phase != Phase.EVENING:
+        raise ValueError("Alliance recruit can only be taken in Evening")
+    if action.clearing_id not in _legal_evening_recruit_clearings(state):
+        raise ValueError("Can only recruit in a clearing with a base")
+    if _alliance_warriors_in_supply(state) <= 0:
+        raise ValueError("No Alliance warriors in supply")
+    state.board.warriors[action.clearing_id][Faction.ALLIANCE] += 1
+    _use_military_operation(state)
+
+
+def apply_organize(state: GameState, action: Organize) -> None:
+    if state.turn.phase != Phase.EVENING:
+        raise ValueError("Organize can only be taken in Evening")
+    if action.clearing_id not in _legal_organize_clearings(state):
+        raise ValueError("Organize requires an Alliance warrior in an unsympathetic clearing")
+    state.board.warriors[action.clearing_id][Faction.ALLIANCE] -= 1
+    state.board.tokens[action.clearing_id][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.alliance.sympathy_in_supply -= 1
+    state.scores[Faction.ALLIANCE] += _sympathy_vp_reward(state)
+    _use_military_operation(state)
 
 
 def apply_revolt(state: GameState, action: Revolt) -> None:
@@ -86,9 +232,39 @@ def can_gain_supporter(state: GameState) -> bool:
 def legal_crafting_cards(state: GameState) -> list[int]:
     """Alliance crafts by activating sympathy tokens in Daylight."""
 
-    from .crafting import legal_craft_cards
-
     return legal_craft_cards(state, state.alliance.hand, Faction.ALLIANCE)
+
+
+def _legal_train_cards(state: GameState) -> list[int]:
+    built_base_suits = {suit for suit, built in state.alliance.bases.items() if built}
+    if not built_base_suits or _alliance_warriors_in_supply(state) <= 0:
+        return []
+    return [
+        card_id
+        for card_id in state.alliance.hand
+        if state.cards[card_id].suit in built_base_suits or state.cards[card_id].suit == Suit.BIRD
+    ]
+
+
+def _legal_evening_recruit_clearings(state: GameState) -> list[int]:
+    if state.turn.phase != Phase.EVENING or _alliance_warriors_in_supply(state) <= 0:
+        return []
+    return [
+        cid
+        for cid, buildings in state.board.buildings.items()
+        if any(building == BuildingType.BASE for building in buildings[Faction.ALLIANCE])
+    ]
+
+
+def _legal_organize_clearings(state: GameState) -> list[int]:
+    if state.turn.phase != Phase.EVENING or state.alliance.sympathy_in_supply <= 0:
+        return []
+    return [
+        cid
+        for cid in state.board.clearings
+        if state.board.warriors[cid][Faction.ALLIANCE] > 0
+        and TokenType.SYMPATHY not in state.board.tokens[cid][Faction.ALLIANCE]
+    ]
 
 
 def _legal_revolt_clearings(state: GameState) -> list[int]:
@@ -206,3 +382,25 @@ def _sympathy_tokens_on_map(state: GameState) -> int:
         for cid in state.board.clearings
         if TokenType.SYMPATHY in state.board.tokens[cid][Faction.ALLIANCE]
     )
+
+
+def _use_military_operation(state: GameState) -> None:
+    if state.turn.phase != Phase.EVENING:
+        raise ValueError("Military operations can only be used in Evening")
+    if state.alliance.military_ops_used >= state.alliance.officers:
+        raise ValueError("No military operations remaining")
+    state.alliance.military_ops_used += 1
+    state.alliance.crafting_window_open = False
+
+
+def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
+    for cid, clearing in state.board.clearings.items():
+        if clearing.suit != favor_suit:
+            continue
+        state.board.warriors[cid][Faction.MARQUISE] = 0
+        state.board.warriors[cid][Faction.EYRIE] = 0
+        state.board.buildings[cid][Faction.MARQUISE].clear()
+        state.board.buildings[cid][Faction.EYRIE].clear()
+        state.board.tokens[cid][Faction.MARQUISE] = [
+            token for token in state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.WOOD
+        ]

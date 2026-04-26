@@ -8,12 +8,15 @@ from root_engine.actions import (
     Craft,
     EndPhase,
     FallIntoTurmoil,
+    Mobilize,
+    Organize,
     Recruit,
     Revolt,
     SelectEyrieLeader,
     SelectMoveDestination,
     SelectMoveSource,
     SpreadSympathy,
+    Train,
 )
 from root_engine.engine import RootEngine
 from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
@@ -528,3 +531,55 @@ def test_alliance_sympathy_vp_track_progression(tokens_on_map: int, expected_vp_
         state.board.tokens[cid][Faction.ALLIANCE].append(TokenType.SYMPATHY)
 
     assert alliance_rules._sympathy_vp_reward(state) == expected_vp_reward
+
+
+def test_alliance_daylight_offers_craft_mobilize_and_train() -> None:
+    engine = RootEngine(seed=103)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    craft_card = next(cid for cid, card in state.cards.items() if card.name == "A Visit to Friends")
+    rabbit_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT and cid != craft_card)
+    state.alliance.hand = [craft_card, rabbit_card]
+    state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.board.buildings[2][Faction.ALLIANCE].append(BuildingType.BASE)
+    state.alliance.bases[Suit.RABBIT] = True
+
+    engine.apply_action(EndPhase())
+    actions = engine.get_valid_actions()
+    assert any(isinstance(action, Craft) and action.card_id == craft_card for action in actions)
+    assert any(isinstance(action, Mobilize) and action.card_id == rabbit_card for action in actions)
+    assert any(isinstance(action, Train) and action.card_id == rabbit_card for action in actions)
+
+
+def test_alliance_evening_military_operations_limited_by_officers() -> None:
+    engine = RootEngine(seed=107)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.alliance.officers = 1
+    state.board.warriors[2][Faction.ALLIANCE] = 1
+    state.board.warriors[2][Faction.MARQUISE] = 1
+    state.board.tokens[2][Faction.ALLIANCE] = [
+        token for token in state.board.tokens[2][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+    ]
+
+    engine.apply_action(EndPhase())  # to Daylight
+    engine.apply_action(EndPhase())  # to Evening
+    assert any(isinstance(action, Organize) for action in engine.get_valid_actions())
+    engine.apply_action(Organize(clearing_id=2))
+    assert state.alliance.military_ops_used == 1
+    assert engine.get_valid_actions() == [EndPhase()]
+
+
+def test_alliance_evening_draws_one_plus_number_of_bases() -> None:
+    engine = RootEngine(seed=109)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.alliance.bases[Suit.FOX] = True
+    state.alliance.bases[Suit.RABBIT] = True
+
+    engine.apply_action(EndPhase())  # to Daylight
+    engine.apply_action(EndPhase())  # to Evening
+    before_hand = len(state.alliance.hand)
+    engine.apply_action(EndPhase())  # end Alliance evening
+
+    assert len(state.alliance.hand) == before_hand + 3
