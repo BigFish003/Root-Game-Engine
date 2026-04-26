@@ -468,3 +468,17 @@ def test_alliance_can_spread_sympathy_multiple_times_in_birdsong_if_legal() -> N
     second_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
     engine.apply_action(second_spread)
     assert engine.get_state().turn.phase == Phase.BIRDSONG
+
+
+def test_alliance_spread_sympathy_cost_uses_tokens_on_map_not_supply_counter() -> None:
+    engine = RootEngine(seed=89)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    # Simulate an out-of-sync counter from previous effects/edits.
+    state.alliance.sympathy_in_supply = 6
+    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:2]
+    state.alliance.supporters = list(bird_supporters)
+
+    legal_spread_clearings = {a.clearing_id for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy)}
+    assert 3 in legal_spread_clearings
