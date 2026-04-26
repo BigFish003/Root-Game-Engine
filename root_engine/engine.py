@@ -14,16 +14,18 @@ from .actions import (
     EndPhase,
     FallIntoTurmoil,
     Recruit,
+    Revolt,
     SelectEyrieLeader,
     SelectBattleClearing,
     SelectBattleTarget,
     SelectMoveDestination,
     SelectMoveSource,
+    SpreadSympathy,
 )
 from .enums import DecisionType, Faction
 from .models import GameState
 from .observation import Observation, build_observation
-from .rules import base_rules, eyrie, marquise
+from .rules import alliance, base_rules, eyrie, marquise
 from .rules.scoring import WINNING_SCORE
 from .state import clone_state, create_initial_state
 from .utils.debug import format_state
@@ -70,8 +72,9 @@ class RootEngine:
             self._apply_marquise_action(action)
         elif faction == Faction.EYRIE:
             self._apply_eyrie_action(action)
+        elif faction == Faction.ALLIANCE:
+            self._apply_alliance_action(action)
         else:
-            # Alliance/Vagabond are intentionally phase-only placeholders for now.
             raise ValueError("Current faction action handlers are not implemented yet")
 
     def clone(self) -> "RootEngine":
@@ -130,3 +133,9 @@ class RootEngine:
             eyrie.apply_fall_into_turmoil(self._state, action)
         elif isinstance(action, SelectEyrieLeader):
             eyrie.apply_select_leader(self._state, action)
+
+    def _apply_alliance_action(self, action) -> None:
+        if isinstance(action, Revolt):
+            alliance.apply_revolt(self._state, action)
+        elif isinstance(action, SpreadSympathy):
+            alliance.apply_spread_sympathy(self._state, action)

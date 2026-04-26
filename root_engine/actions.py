@@ -87,3 +87,13 @@ class FallIntoTurmoil(Action):
 @dataclass(frozen=True)
 class SelectEyrieLeader(Action):
     leader: str
+
+
+@dataclass(frozen=True)
+class Revolt(Action):
+    clearing_id: int
+
+
+@dataclass(frozen=True)
+class SpreadSympathy(Action):
+    clearing_id: int
