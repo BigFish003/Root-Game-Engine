@@ -327,7 +327,7 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     assert not state.eyrie.crafting_window_open
 
 
-def test_eyrie_roost_scoring_track_and_draw_bonus() -> None:
+def test_eyrie_roost_scores_in_evening_based_on_total_roosts_and_gets_draw_bonus() -> None:
     engine = RootEngine(seed=305, excluded_factions={Faction.MARQUISE, Faction.ALLIANCE, Faction.VAGABOND})
     while engine.get_state().turn.current_faction != Faction.EYRIE:
         engine.apply_action(EndPhase())
@@ -345,7 +345,7 @@ def test_eyrie_roost_scoring_track_and_draw_bonus() -> None:
     engine.apply_action(EndPhase())  # birdsong -> daylight
     build = next(action for action in engine.get_valid_actions() if isinstance(action, Build))
     engine.apply_action(build)
-    assert state.scores[Faction.EYRIE] == 1
+    assert state.scores[Faction.EYRIE] == 0
 
     state.eyrie.roosts_in_supply = 2  # simulate five roosts already on map
     state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST] * 5
@@ -354,6 +354,7 @@ def test_eyrie_roost_scoring_track_and_draw_bonus() -> None:
     hand_before_evening = len(state.eyrie.hand)
     engine.apply_action(EndPhase())  # daylight -> evening
     engine.apply_action(EndPhase())  # evening resolution
+    assert state.scores[Faction.EYRIE] == 5
     assert len(state.eyrie.hand) == hand_before_evening + 2
 
 

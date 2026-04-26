@@ -95,7 +95,6 @@ def apply_build(state: GameState, action: Build) -> None:
         raise ValueError("No free slot")
     state.board.buildings[action.clearing_id][Faction.EYRIE].append(BuildingType.ROOST)
     state.eyrie.roosts_in_supply -= 1
-    state.scores[Faction.EYRIE] += _roost_build_score(state)
     _consume_decree_card(state, "build", state.board.clearings[action.clearing_id].suit)
 
 
@@ -259,9 +258,8 @@ def _card_suit(state: GameState, card_id: int) -> Suit:
     return state.cards[card_id].suit
 
 
-def _roost_build_score(state: GameState) -> int:
-    roosts_built = 7 - state.eyrie.roosts_in_supply
-    return [0, 1, 2, 3, 4, 4, 5][roosts_built - 1]
+def roost_points_for_evening(state: GameState) -> int:
+    return 7 - state.eyrie.roosts_in_supply
 
 
 def roost_draw_bonus(state: GameState) -> int:
