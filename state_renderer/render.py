@@ -339,6 +339,58 @@ class state_renderer:
                 int(faction.get("score", state_dictionary.get("scores", {}).get("vagabond", 0))),
             )
 
+        def card_label(card_id: Any) -> str:
+            suit = suit_symbol_from_card_id(card_id)
+            if isinstance(card_id, int):
+                return f"{card_id} ({suit})"
+            return str(card_id)
+
+        def draw_observer_private_panel(panel_rect: tuple[int, int, int, int]) -> None:
+            left, top, right, bottom = panel_rect
+            draw.rectangle(panel_rect, fill=(248, 248, 248), outline="black", width=3)
+            draw.rectangle((left, top, right, top + 30), fill=(80, 80, 80), outline="black", width=2)
+            draw.text((left + 8, top + 8), "Observer Private Info", fill="white", font=font_bold)
+
+            meta = state_dictionary.get("meta", {})
+            observer = str(meta.get("observer") or "")
+            if not observer:
+                draw.text((left + 8, top + 42), "No observer context (full game state).", fill="black", font=font)
+                return
+
+            observer_data = state_dictionary.get("factions", {}).get(observer, {})
+            private_data = observer_data.get("private_data", {}) or {}
+            hand = observer_data.get("hand") or []
+            hand_count = int(observer_data.get("hand_count", len(hand)))
+
+            y = top + 40
+            draw.text((left + 8, y), f"Observer: {observer.title()}", fill="black", font=font)
+            y += 20
+            draw.text((left + 8, y), f"Hand ({hand_count})", fill="black", font=font_bold)
+            y += 16
+
+            if hand:
+                for card_id in hand:
+                    if y > bottom - 18:
+                        draw.text((left + 8, y), "...", fill="black", font=font)
+                        return
+                    draw.text((left + 16, y), f"- {card_label(card_id)}", fill="black", font=small_font)
+                    y += 14
+            else:
+                draw.text((left + 16, y), "(hidden or empty)", fill="black", font=small_font)
+                y += 16
+
+            supporters = private_data.get("supporters") or []
+            if supporters:
+                y += 4
+                draw.text((left + 8, y), f"Supporters ({len(supporters)})", fill="black", font=font_bold)
+                y += 16
+                for card_id in supporters:
+                    if y > bottom - 18:
+                        draw.text((left + 8, y), "...", fill="black", font=font)
+                        return
+                    draw.text((left + 16, y), f"- {card_label(card_id)}", fill="black", font=small_font)
+                    y += 14
+
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
@@ -375,6 +427,8 @@ class state_renderer:
         }
 
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
+        private_panel_rect = (550, 0, 800, 350)
+        draw_observer_private_panel(private_panel_rect)
 
         clearing_positions: dict[int, tuple[int, int]] = {
             1: (90, 45),
