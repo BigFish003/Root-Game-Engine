@@ -75,7 +75,41 @@ def test_recruit_and_build_mutate_state() -> None:
     )
     before_score = engine.get_state().scores[Faction.MARQUISE]
     engine.apply_action(build)
-    assert engine.get_state().scores[Faction.MARQUISE] == before_score + 2
+    assert engine.get_state().scores[Faction.MARQUISE] == before_score + 1
+
+
+def test_marquise_build_scoring_track_and_recruiter_draw_bonus() -> None:
+    engine = RootEngine(seed=203, excluded_factions={Faction.EYRIE, Faction.ALLIANCE, Faction.VAGABOND})
+    state = engine.get_state()
+    state.board.buildings[2][Faction.MARQUISE] = [BuildingType.RECRUITER]
+    state.marquise.buildings_in_supply[BuildingType.RECRUITER] = 5
+    state.board.warriors[2][Faction.MARQUISE] = 5
+    state.board.tokens[2][Faction.MARQUISE] = [TokenType.WOOD, TokenType.WOOD, TokenType.WOOD, TokenType.WOOD]
+    state.scores[Faction.MARQUISE] = 0
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+
+    first_build = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, Build) and action.clearing_id == 2 and action.building_type == BuildingType.RECRUITER
+    )
+    engine.apply_action(first_build)
+    assert state.scores[Faction.MARQUISE] == 1
+
+    state.marquise.daylight_actions_used = 0
+    second_build = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, Build) and action.building_type == BuildingType.RECRUITER
+    )
+    engine.apply_action(second_build)
+    assert state.scores[Faction.MARQUISE] == 3
+
+    hand_before_evening = len(state.marquise.hand)
+    engine.apply_action(EndPhase())  # daylight -> evening
+    engine.apply_action(EndPhase())  # evening resolution
+    assert len(state.marquise.hand) == hand_before_evening + 2
 
 
 def test_atomic_move_selection_changes_context_and_board() -> None:
@@ -291,6 +325,36 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
     engine.apply_action(recruit)
     assert not state.eyrie.crafting_window_open
+
+
+def test_eyrie_roost_scoring_track_and_draw_bonus() -> None:
+    engine = RootEngine(seed=305, excluded_factions={Faction.MARQUISE, Faction.ALLIANCE, Faction.VAGABOND})
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+    state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.birdsong_cards_added = 1
+    state.board.warriors[11][Faction.EYRIE] = 2
+    state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST]
+    state.eyrie.roosts_in_supply = 6
+    state.scores[Faction.EYRIE] = 0
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    build = next(action for action in engine.get_valid_actions() if isinstance(action, Build))
+    engine.apply_action(build)
+    assert state.scores[Faction.EYRIE] == 1
+
+    state.eyrie.roosts_in_supply = 2  # simulate five roosts already on map
+    state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST] * 5
+    state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": []}
+    hand_before_evening = len(state.eyrie.hand)
+    engine.apply_action(EndPhase())  # daylight -> evening
+    engine.apply_action(EndPhase())  # evening resolution
+    assert len(state.eyrie.hand) == hand_before_evening + 2
 
 
 def test_eyrie_move_decree_allows_moving_multiple_warriors() -> None:

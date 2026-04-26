@@ -5,6 +5,8 @@ from __future__ import annotations
 from ..enums import BuildingType, DecisionType, Faction, Phase, TokenType
 from ..models import GameState
 from .crafting import initialize_marquise_crafting_power
+from .eyrie import roost_draw_bonus
+from .marquise import recruiter_draw_bonus
 
 
 def advance_phase(state: GameState) -> None:
@@ -67,7 +69,11 @@ def _on_daylight_start(state: GameState) -> None:
 def _resolve_evening_effects(state: GameState) -> None:
     faction_state = state.faction_state(state.turn.current_faction)
     draw_count = 1
-    if state.turn.current_faction == Faction.ALLIANCE:
+    if state.turn.current_faction == Faction.MARQUISE:
+        draw_count += recruiter_draw_bonus(state)
+    elif state.turn.current_faction == Faction.EYRIE:
+        draw_count += roost_draw_bonus(state)
+    elif state.turn.current_faction == Faction.ALLIANCE:
         draw_count += sum(1 for built in state.alliance.bases.values() if built)
     _draw_cards(state, faction_state.hand, draw_count)
     while len(faction_state.hand) > 5:
