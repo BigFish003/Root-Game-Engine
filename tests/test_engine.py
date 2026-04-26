@@ -758,6 +758,7 @@ def test_alliance_evening_draws_one_plus_number_of_bases() -> None:
 def test_defenseless_battle_removes_sympathy_without_attacker_loss() -> None:
     engine = RootEngine(seed=701)
     state = engine.get_state()
+    before_score = state.scores[Faction.MARQUISE]
     state.board.warriors[2][Faction.MARQUISE] = 1
     state.board.warriors[2][Faction.ALLIANCE] = 0
     state.board.tokens[2][Faction.ALLIANCE] = [TokenType.SYMPATHY]
@@ -766,6 +767,20 @@ def test_defenseless_battle_removes_sympathy_without_attacker_loss() -> None:
 
     assert state.board.warriors[2][Faction.MARQUISE] == 1
     assert TokenType.SYMPATHY not in state.board.tokens[2][Faction.ALLIANCE]
+    assert state.scores[Faction.MARQUISE] == before_score + 1
+
+
+def test_battle_only_scores_for_cardboard_not_warriors() -> None:
+    engine = RootEngine(seed=704)
+    state = engine.get_state()
+    before_score = state.scores[Faction.MARQUISE]
+    state.board.warriors[2][Faction.MARQUISE] = 1
+    state.board.warriors[2][Faction.EYRIE] = 1
+
+    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.EYRIE, 2)
+
+    assert state.board.warriors[2][Faction.EYRIE] == 0
+    assert state.scores[Faction.MARQUISE] == before_score
 
 
 def test_outrage_on_move_into_sympathetic_clearing_spends_matching_card() -> None:

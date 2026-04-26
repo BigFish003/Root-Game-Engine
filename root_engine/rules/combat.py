@@ -62,7 +62,6 @@ def resolve_basic_battle(
 
     if defender_losses > 0:
         state.board.warriors[clearing_id][defender] -= defender_losses
-        state.scores[attacker] += defender_losses
     if remaining_attacker_hits > 0:
         removed = _remove_defender_cardboard(state, attacker, defender, clearing_id, remaining_attacker_hits)
         if removed:
