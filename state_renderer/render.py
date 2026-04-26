@@ -459,6 +459,11 @@ class state_renderer:
         draw_alliance_board(alliance_rect)
         draw_vagabond_board(vagabond_rect)
 
+        target_size = (1600, 1200)
+        if img.size != target_size:
+            resampling = getattr(Image, "Resampling", Image).LANCZOS
+            img = img.resize(target_size, resample=resampling)
+
         img.save(output_path)
 
     def build_state_dictionary(self, state: Any) -> dict[str, Any]:

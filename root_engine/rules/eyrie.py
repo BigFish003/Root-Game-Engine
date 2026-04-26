@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from scipy.cluster.hierarchy import leaders
+
 from ..actions import (
     AddToDecree,
     Build,
@@ -64,6 +66,10 @@ def valid_actions(state: GameState) -> list:
 
 
 def apply_recruit(state: GameState, action: Recruit) -> None:
+    if state.eyrie.leader == "charismatic":
+        warriors_to_place = 2
+    else:
+        warriors_to_place = 1
     if action.clearing_id == state.marquise.keep_clearing:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if state.eyrie.warriors_in_supply <= 0:
