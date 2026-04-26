@@ -422,6 +422,8 @@ class state_renderer:
             label_w = label_bbox[2] - label_bbox[0]
             label_h = label_bbox[3] - label_bbox[1]
             draw.text((cx - label_w / 2, cy - label_h / 2), label, fill="black", font=font)
+            clearing_suit = normalize_suit_symbol(clearing_data.get("suit", "bird"))
+            draw_suit_icon(clearing_suit, cx + radius - 2, cy + radius - 2)
 
             slots = int(clearing_data.get("building_slots", 0))
             if slots > 0:
@@ -429,8 +431,9 @@ class state_renderer:
                 for faction in ("marquise", "eyrie", "alliance", "vagabond"):
                     for building_name in clearing_data.get("buildings", {}).get(faction, []):
                         if building_name == "base":
-                            clearing_suit = str(clearing_data.get("suit", "")).lower()
-                            building_name = f"{clearing_suit}_base" if clearing_suit in ("mouse", "fox", "rabbit") else "base"
+                            building_name = (
+                                f"{clearing_suit}_base" if clearing_suit in ("mouse", "fox", "rabbit") else "base"
+                            )
                         buildings.append((faction, building_name))
                 add_build_spots(center, slots, buildings)
 
