@@ -62,6 +62,7 @@ class DecisionContext:
     selected_source: Optional[int] = None
     selected_destination: Optional[int] = None
     selected_battle_clearing: Optional[int] = None
+    pending_moves_remaining: int = 0
 
 
 @dataclass

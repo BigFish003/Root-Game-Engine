@@ -70,6 +70,7 @@ class RootEngine:
                 selected_source=None,
                 selected_destination=None,
                 selected_battle_clearing=None,
+                pending_moves_remaining=0,
             )
             return
         if isinstance(action, EndPhase):
