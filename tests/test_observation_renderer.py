@@ -71,6 +71,20 @@ def test_renderer_shows_alliance_supporters_only_for_alliance_observer() -> None
     assert "supporters: [1, 2, 3]" in alliance_view
 
 
+def test_alliance_private_observation_includes_supporter_suits_by_id() -> None:
+    engine = RootEngine(seed=145)
+    state = engine.get_state()
+    rabbit = next(cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT)
+    fox = next(cid for cid, card in state.cards.items() if card.suit == Suit.FOX and cid != rabbit)
+    state.alliance.supporters = [rabbit, fox]
+
+    obs = engine.get_observation(Faction.ALLIANCE)
+    private_data = obs.factions[Faction.ALLIANCE].private_data
+
+    assert private_data["supporters"] == [rabbit, fox]
+    assert private_data["supporter_suits_by_id"] == {str(rabbit): "rabbit", str(fox): "fox"}
+
+
 def test_eyrie_observation_exposes_decree_suits() -> None:
     engine = RootEngine(seed=55)
     state = engine.get_state()
