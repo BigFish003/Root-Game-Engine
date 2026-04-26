@@ -220,6 +220,38 @@ def gain_supporter(state: GameState, card_id: int) -> bool:
     return True
 
 
+def trigger_outrage(
+    state: GameState,
+    offending_faction: Faction,
+    clearing_id: int,
+    require_sympathy_present: bool = True,
+) -> None:
+    """Resolve Alliance outrage caused by another faction in a sympathetic clearing."""
+
+    if offending_faction == Faction.ALLIANCE:
+        return
+    if require_sympathy_present and TokenType.SYMPATHY not in state.board.tokens[clearing_id][Faction.ALLIANCE]:
+        return
+    hand = _faction_hand(state, offending_faction)
+    if hand is None:
+        return
+    clearing_suit = state.board.clearings[clearing_id].suit
+    matching_card_id = next(
+        (
+            card_id
+            for card_id in hand
+            if state.cards[card_id].suit in (clearing_suit, Suit.BIRD)
+        ),
+        None,
+    )
+    if matching_card_id is not None:
+        hand.remove(matching_card_id)
+        gain_supporter(state, matching_card_id)
+        return
+    if state.draw_pile:
+        gain_supporter(state, state.draw_pile.pop())
+
+
 def can_gain_supporter(state: GameState) -> bool:
     """Supporters are capped at 5 when the Alliance has no bases."""
 
@@ -227,6 +259,18 @@ def can_gain_supporter(state: GameState) -> bool:
     if has_any_base:
         return True
     return len(state.alliance.supporters) < 5
+
+
+def _faction_hand(state: GameState, faction: Faction) -> list[int] | None:
+    if faction == Faction.MARQUISE:
+        return state.marquise.hand
+    if faction == Faction.EYRIE:
+        return state.eyrie.hand
+    if faction == Faction.ALLIANCE:
+        return state.alliance.hand
+    if faction == Faction.VAGABOND:
+        return state.vagabond.hand
+    return None
 
 
 def legal_crafting_cards(state: GameState) -> list[int]:

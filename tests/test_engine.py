@@ -23,6 +23,7 @@ from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, 
 from root_engine.rules import alliance as alliance_rules
 from root_engine.rules import combat as combat_rules
 from root_engine.rules import eyrie as eyrie_rules
+from root_engine.rules import marquise as marquise_rules
 
 
 def _advance_to_alliance_birdsong(engine: RootEngine) -> None:
@@ -603,3 +604,46 @@ def test_alliance_evening_draws_one_plus_number_of_bases() -> None:
     engine.apply_action(EndPhase())  # end Alliance evening
 
     assert len(state.alliance.hand) == before_hand + 3
+
+
+def test_defenseless_battle_removes_sympathy_without_attacker_loss() -> None:
+    engine = RootEngine(seed=701)
+    state = engine.get_state()
+    state.board.warriors[2][Faction.MARQUISE] = 1
+    state.board.warriors[2][Faction.ALLIANCE] = 0
+    state.board.tokens[2][Faction.ALLIANCE] = [TokenType.SYMPATHY]
+
+    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, 2)
+
+    assert state.board.warriors[2][Faction.MARQUISE] == 1
+    assert TokenType.SYMPATHY not in state.board.tokens[2][Faction.ALLIANCE]
+
+
+def test_outrage_on_move_into_sympathetic_clearing_spends_matching_card() -> None:
+    engine = RootEngine(seed=702)
+    state = engine.get_state()
+    mouse_card = next(cid for cid, c in state.cards.items() if c.suit == Suit.MOUSE)
+    rabbit_card = next(cid for cid, c in state.cards.items() if c.suit == Suit.RABBIT)
+    state.marquise.hand = [rabbit_card, mouse_card]
+    state.board.tokens[3][Faction.ALLIANCE].append(TokenType.SYMPATHY)  # clearing 3 is mouse
+    state.board.warriors[1][Faction.MARQUISE] = 1
+    state.decision_context.selected_source = 1
+
+    marquise_rules.apply_move_destination(state, SelectMoveDestination(clearing_id=3))
+
+    assert mouse_card not in state.marquise.hand
+    assert mouse_card in state.alliance.supporters
+
+
+def test_outrage_on_sympathy_removal_draws_when_no_matching_cards() -> None:
+    engine = RootEngine(seed=703)
+    state = engine.get_state()
+    state.marquise.hand = []
+    state.draw_pile = [state.draw_pile[-1]]
+    top_card = state.draw_pile[-1]
+    state.board.warriors[2][Faction.MARQUISE] = 1
+    state.board.tokens[2][Faction.ALLIANCE] = [TokenType.SYMPATHY]
+
+    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, 2)
+
+    assert top_card in state.alliance.supporters
