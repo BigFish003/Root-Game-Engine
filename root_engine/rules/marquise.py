@@ -183,14 +183,17 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
             continue
         state.board.warriors[cid][Faction.EYRIE] = 0
         state.board.warriors[cid][Faction.ALLIANCE] = 0
+        removed = len(state.board.buildings[cid][Faction.EYRIE]) + len(state.board.buildings[cid][Faction.ALLIANCE])
         state.board.buildings[cid][Faction.EYRIE].clear()
         state.board.buildings[cid][Faction.ALLIANCE].clear()
         sympathy_removed = sum(
             1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY
         )
+        removed += sympathy_removed
         state.board.tokens[cid][Faction.ALLIANCE] = [
             token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
         ]
+        state.scores[Faction.MARQUISE] += removed
         for _ in range(sympathy_removed):
             alliance_rules.trigger_outrage(state, Faction.MARQUISE, cid, require_sympathy_present=False)
 
