@@ -152,7 +152,14 @@ def _private_faction_data(state: GameState, faction: Faction, observer: Faction)
     if faction != observer:
         return {}
     if faction == Faction.ALLIANCE:
-        return {"supporters": list(state.alliance.supporters)}
+        return {
+            "supporters": list(state.alliance.supporters),
+            "supporter_suits_by_id": {
+                str(card_id): state.cards[card_id].suit.value
+                for card_id in state.alliance.supporters
+                if card_id in state.cards
+            },
+        }
     return {}
 
 

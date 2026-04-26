@@ -183,7 +183,14 @@ class state_renderer:
             if isinstance(card_id, int):
                 raw_cards = state_dictionary.get("raw", {}).get("cards", {})
                 card = raw_cards.get(str(card_id), {})
-                return normalize_suit_symbol(card.get("suit", "bird"))
+                if card:
+                    return normalize_suit_symbol(card.get("suit", "bird"))
+                observer = str(state_dictionary.get("meta", {}).get("observer") or "")
+                private_data = state_dictionary.get("factions", {}).get(observer, {}).get("private_data", {}) or {}
+                supporter_suits = private_data.get("supporter_suits_by_id", {}) or {}
+                if str(card_id) in supporter_suits:
+                    return normalize_suit_symbol(supporter_suits[str(card_id)])
+                return "bird"
             return normalize_suit_symbol(card_id)
 
         def draw_suit_icon(symbol: str, x: int, y: int) -> None:

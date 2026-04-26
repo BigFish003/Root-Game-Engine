@@ -448,7 +448,7 @@ def test_alliance_spread_sympathy_accounts_for_martial_law_cost() -> None:
     engine.apply_action(SpreadSympathy(clearing_id=3))
 
     assert TokenType.SYMPATHY in state.board.tokens[3][Faction.ALLIANCE]
-    assert len(state.alliance.supporters) == 0
+    assert len(state.alliance.supporters) == 1
     assert state.scores[Faction.ALLIANCE] == before_score + 1
 
 
@@ -482,3 +482,49 @@ def test_alliance_spread_sympathy_cost_uses_tokens_on_map_not_supply_counter() -
 
     legal_spread_clearings = {a.clearing_id for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy)}
     assert 3 in legal_spread_clearings
+
+
+@pytest.mark.parametrize(
+    ("tokens_on_map", "expected_cost"),
+    [
+        (0, 1),
+        (2, 1),
+        (3, 2),
+        (5, 2),
+        (6, 3),
+        (9, 3),
+    ],
+)
+def test_alliance_sympathy_cost_track_by_tokens_on_map(tokens_on_map: int, expected_cost: int) -> None:
+    engine = RootEngine(seed=97)
+    state = engine.get_state()
+    state.alliance.supporters = []
+    suit = state.board.clearings[1].suit
+    matching_supporters = [cid for cid, card in state.cards.items() if card.suit in (suit, Suit.BIRD)]
+    state.alliance.supporters = matching_supporters[:expected_cost]
+    for cid in range(1, 1 + tokens_on_map):
+        state.board.tokens[cid][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+
+    assert alliance_rules._sympathy_supporter_cost(state) == expected_cost
+
+
+@pytest.mark.parametrize(
+    ("tokens_on_map", "expected_vp_reward"),
+    [
+        (1, 0),
+        (2, 1),
+        (4, 1),
+        (5, 2),
+        (6, 2),
+        (7, 3),
+        (8, 4),
+        (10, 4),
+    ],
+)
+def test_alliance_sympathy_vp_track_progression(tokens_on_map: int, expected_vp_reward: int) -> None:
+    engine = RootEngine(seed=101)
+    state = engine.get_state()
+    for cid in range(1, 1 + tokens_on_map):
+        state.board.tokens[cid][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+
+    assert alliance_rules._sympathy_vp_reward(state) == expected_vp_reward
