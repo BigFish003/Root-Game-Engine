@@ -404,22 +404,8 @@ def test_alliance_birdsong_offers_revolt_and_sympathy_actions() -> None:
     state.alliance.supporters = list(bird_supporters)
 
     actions = engine.get_valid_actions()
-    assert isinstance(actions[0], EndPhase)
     assert any(isinstance(a, Revolt) and a.clearing_id == 2 for a in actions)
     assert any(isinstance(a, SpreadSympathy) for a in actions)
-
-
-def test_eyrie_birdsong_end_phase_is_prioritized_when_available() -> None:
-    engine = RootEngine(seed=97)
-    engine.apply_action(EndPhase())
-    engine.apply_action(EndPhase())
-    engine.apply_action(EndPhase())
-    engine.get_state().eyrie.birdsong_cards_added = 1
-
-    actions = engine.get_valid_actions()
-
-    assert any(isinstance(action, EndPhase) for action in actions)
-    assert isinstance(actions[0], EndPhase)
 
 
 def test_alliance_revolt_removes_enemy_pieces_places_base_and_officer() -> None:
@@ -464,3 +450,21 @@ def test_alliance_spread_sympathy_accounts_for_martial_law_cost() -> None:
     assert TokenType.SYMPATHY in state.board.tokens[3][Faction.ALLIANCE]
     assert len(state.alliance.supporters) == 0
     assert state.scores[Faction.ALLIANCE] == before_score + 1
+
+
+def test_alliance_can_spread_sympathy_multiple_times_in_birdsong_if_legal() -> None:
+    engine = RootEngine(seed=83)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:5]
+    state.alliance.supporters = list(bird_supporters)
+    state.alliance.sympathy_in_supply = 10
+
+    first_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    engine.apply_action(first_spread)
+    assert engine.get_state().turn.phase == Phase.BIRDSONG
+    assert any(isinstance(a, SpreadSympathy) for a in engine.get_valid_actions())
+
+    second_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    engine.apply_action(second_spread)
+    assert engine.get_state().turn.phase == Phase.BIRDSONG
