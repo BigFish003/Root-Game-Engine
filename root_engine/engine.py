@@ -38,11 +38,16 @@ from .utils.serialize import to_jsonable
 class RootEngine:
     """Root base-game engine focused on state transitions and legal actions."""
 
-    def __init__(self, seed: Optional[int] = None) -> None:
-        self._state = create_initial_state(seed)
+    def __init__(
+        self,
+        seed: Optional[int] = None,
+        excluded_factions: Optional[set[Faction]] = None,
+    ) -> None:
+        self._excluded_factions = set(excluded_factions or set())
+        self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
 
     def reset(self, seed: int | None = None) -> GameState:
-        self._state = create_initial_state(seed)
+        self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
         return self._state
 
     def get_state(self) -> GameState:
@@ -81,7 +86,10 @@ class RootEngine:
             raise ValueError("Current faction action handlers are not implemented yet")
 
     def clone(self) -> "RootEngine":
-        clone = RootEngine(seed=self._state.seed)
+        clone = RootEngine(
+            seed=self._state.seed,
+            excluded_factions=set(self._excluded_factions),
+        )
         clone._state = clone_state(self._state)
         return clone
 

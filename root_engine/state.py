@@ -21,7 +21,10 @@ from .models import (
 )
 
 
-def create_initial_state(seed: Optional[int] = None) -> GameState:
+def create_initial_state(
+    seed: Optional[int] = None,
+    excluded_factions: Optional[set[Faction]] = None,
+) -> GameState:
     """Create and setup a new game state."""
 
     rng = random.Random(seed)
@@ -38,6 +41,11 @@ def create_initial_state(seed: Optional[int] = None) -> GameState:
     draw_pile = [c.card_id for c in cards]
     rng.shuffle(draw_pile)
 
+    excluded = excluded_factions or set()
+    active_factions = [f for f in Faction if f not in excluded]
+    if not active_factions:
+        raise ValueError("At least one faction must be included in the game")
+
     state = GameState(
         seed=seed,
         board=board,
@@ -53,8 +61,11 @@ def create_initial_state(seed: Optional[int] = None) -> GameState:
         turn=TurnState(),
         decision_context=DecisionContext(),
     )
-    _setup_starting_positions(state)
-    _deal_opening_hands(state)
+    state.turn.turn_order = active_factions
+    state.turn.current_faction = active_factions[0]
+
+    _setup_starting_positions(state, excluded)
+    _deal_opening_hands(state, excluded)
     return state
 
 
@@ -64,39 +75,45 @@ def clone_state(state: GameState) -> GameState:
     return copy.deepcopy(state)
 
 
-def _setup_starting_positions(state: GameState) -> None:
+def _setup_starting_positions(state: GameState, excluded_factions: set[Faction]) -> None:
     # Marquise opening: keep + one sawmill/workshop/recruiter + warriors concentrated.
-    keep = 1
-    state.marquise.keep_clearing = keep
-    state.board.tokens[keep][Faction.MARQUISE].append(TokenType.KEEP)
-    state.board.buildings[keep][Faction.MARQUISE].append(BuildingType.SAWMILL)
-    state.board.buildings[2][Faction.MARQUISE].append(BuildingType.WORKSHOP)
-    state.board.buildings[4][Faction.MARQUISE].append(BuildingType.RECRUITER)
-    state.marquise.buildings_in_supply[BuildingType.SAWMILL] -= 1
-    state.marquise.buildings_in_supply[BuildingType.WORKSHOP] -= 1
-    state.marquise.buildings_in_supply[BuildingType.RECRUITER] -= 1
-    for cid in [1, 2,3, 4, 5, 6,7, 8,9, 10, 11]:
-        state.board.warriors[cid][Faction.MARQUISE] = 1
-        state.marquise.warriors_in_supply -= 1
+    if Faction.MARQUISE not in excluded_factions:
+        keep = 1
+        state.marquise.keep_clearing = keep
+        state.board.tokens[keep][Faction.MARQUISE].append(TokenType.KEEP)
+        state.board.buildings[keep][Faction.MARQUISE].append(BuildingType.SAWMILL)
+        state.board.buildings[2][Faction.MARQUISE].append(BuildingType.WORKSHOP)
+        state.board.buildings[4][Faction.MARQUISE].append(BuildingType.RECRUITER)
+        state.marquise.buildings_in_supply[BuildingType.SAWMILL] -= 1
+        state.marquise.buildings_in_supply[BuildingType.WORKSHOP] -= 1
+        state.marquise.buildings_in_supply[BuildingType.RECRUITER] -= 1
+        for cid in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]:
+            state.board.warriors[cid][Faction.MARQUISE] = 1
+            state.marquise.warriors_in_supply -= 1
 
     # Eyrie opening
-    state.board.buildings[12][Faction.EYRIE].append(BuildingType.ROOST)
-    state.eyrie.roosts_in_supply -= 1
-    state.board.warriors[12][Faction.EYRIE] = 6
-    state.eyrie.warriors_in_supply -= 6
-    _assign_eyrie_leader_viziers(state, state.eyrie.leader)
+    if Faction.EYRIE not in excluded_factions:
+        state.board.buildings[12][Faction.EYRIE].append(BuildingType.ROOST)
+        state.eyrie.roosts_in_supply -= 1
+        state.board.warriors[12][Faction.EYRIE] = 6
+        state.eyrie.warriors_in_supply -= 6
+        _assign_eyrie_leader_viziers(state, state.eyrie.leader)
 
     # Vagabond opening (forest abstracted as clearing 12 adjacency anchor)
-    state.vagabond.location = 12
+    if Faction.VAGABOND not in excluded_factions:
+        state.vagabond.location = 12
 
 
-def _deal_opening_hands(state: GameState) -> None:
+def _deal_opening_hands(state: GameState, excluded_factions: set[Faction]) -> None:
     for faction in [Faction.MARQUISE, Faction.EYRIE, Faction.VAGABOND]:
+        if faction in excluded_factions:
+            continue
         opening_hand = [state.draw_pile.pop() for _ in range(3)]
         state.faction_state(faction).hand.extend(opening_hand)
 
     # Woodland Alliance starts with supporters, not cards in hand.
-    state.alliance.supporters.extend(state.draw_pile.pop() for _ in range(3))
+    if Faction.ALLIANCE not in excluded_factions:
+        state.alliance.supporters.extend(state.draw_pile.pop() for _ in range(3))
 
 
 def _assign_eyrie_leader_viziers(state: GameState, leader: str) -> None:
