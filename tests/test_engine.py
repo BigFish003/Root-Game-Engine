@@ -293,6 +293,41 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     assert not state.eyrie.crafting_window_open
 
 
+def test_eyrie_move_decree_allows_moving_multiple_warriors() -> None:
+    engine = RootEngine(seed=39)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    state.eyrie.decree = {"recruit": [], "move": [-102], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [-102], "battle": [], "build": []}
+    state.eyrie.birdsong_cards_added = 1
+    state.board.warriors[12][Faction.EYRIE] = 6
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    source_action = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectMoveSource) and action.clearing_id == 12
+    )
+    engine.apply_action(source_action)
+
+    destination_actions = [
+        action for action in engine.get_valid_actions() if isinstance(action, SelectMoveDestination)
+    ]
+    assert any(action.warriors == 6 for action in destination_actions)
+    move_all_action = next(action for action in destination_actions if action.warriors == 6)
+    destination = move_all_action.clearing_id
+    before_destination = state.board.warriors[destination][Faction.EYRIE]
+
+    engine.apply_action(move_all_action)
+
+    assert state.board.warriors[12][Faction.EYRIE] == 0
+    assert state.board.warriors[destination][Faction.EYRIE] == before_destination + 6
+
+
 def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     engine = RootEngine(seed=41)
     while engine.get_state().turn.current_faction != Faction.EYRIE:
