@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from scipy.cluster.hierarchy import leaders
-
 from ..actions import (
     AddToDecree,
     Build,
@@ -172,6 +170,13 @@ def apply_fall_into_turmoil(state: GameState, action: FallIntoTurmoil) -> None:
     del action
     if state.eyrie.leader not in state.eyrie.turmoiled_leaders:
         state.eyrie.turmoiled_leaders.append(state.eyrie.leader)
+    bird_cards_in_decree = sum(
+        1
+        for cards in state.eyrie.decree.values()
+        for card_id in cards
+        if _card_suit(state, card_id) == Suit.BIRD
+    )
+    state.scores[Faction.EYRIE] = max(0, state.scores[Faction.EYRIE] - bird_cards_in_decree)
     for cards in state.eyrie.decree.values():
         state.discard_pile.extend(card_id for card_id in cards if card_id > 0)
         cards.clear()
@@ -189,6 +194,8 @@ def apply_select_leader(state: GameState, action: SelectEyrieLeader) -> None:
     state.eyrie.leader = action.leader
     _assign_leader_viziers(state, action.leader)
     state.eyrie.pending_leader_selection = False
+    state.turn.phase = Phase.EVENING
+    state.decision_context.decision_type = DecisionType.MAIN_ACTION
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:

@@ -268,6 +268,51 @@ def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     assert any(isinstance(action, FallIntoTurmoil) for action in actions)
 
 
+def test_eyrie_turmoil_causes_bird_card_point_loss_and_moves_to_evening() -> None:
+    engine = RootEngine(seed=42)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    bird_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.BIRD)
+    clearing_suit = state.board.clearings[6].suit
+    off_suit_card = next(
+        cid for cid, card in state.cards.items() if card.suit not in (Suit.BIRD, clearing_suit)
+    )
+    state.eyrie.decree = {"recruit": [bird_card, -101], "move": [off_suit_card], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [bird_card, -101],
+        "move": [off_suit_card],
+        "battle": [],
+        "build": [],
+    }
+    for cid in state.board.clearings:
+        state.board.warriors[cid][Faction.EYRIE] = 0
+        state.board.buildings[cid][Faction.EYRIE] = [
+            b for b in state.board.buildings[cid][Faction.EYRIE] if b != BuildingType.ROOST
+        ]
+    state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing for recruit
+    state.eyrie.warriors_in_supply = 20
+    state.scores[Faction.EYRIE] = 4
+
+    state.eyrie.birdsong_cards_added = 1
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    for _ in range(2):
+        recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+        engine.apply_action(recruit)
+    engine.apply_action(FallIntoTurmoil())
+
+    assert state.scores[Faction.EYRIE] == 2
+    assert bird_card in state.discard_pile
+    assert off_suit_card in state.discard_pile
+    assert all(card_id > 0 for cards in state.eyrie.decree.values() for card_id in cards)
+    engine.apply_action(SelectEyrieLeader("despot"))
+    assert state.turn.phase == Phase.EVENING
+    assert all(not isinstance(action, Recruit) for action in engine.get_valid_actions())
+
+
 def test_eyrie_lords_of_the_forest_rules_ties_but_not_empty_clearings() -> None:
     engine = RootEngine(seed=43)
     state = engine.get_state()
@@ -288,6 +333,7 @@ def test_eyrie_disdain_for_trade_scores_one_for_item_craft() -> None:
     state = engine.get_state()
     anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
     state.eyrie.hand = [anvil]
+    state.eyrie.birdsong_cards_added = 1
     state.board.buildings[1][Faction.EYRIE].append(BuildingType.ROOST)
     engine.apply_action(EndPhase())  # birdsong -> daylight
     before = state.scores[Faction.EYRIE]
