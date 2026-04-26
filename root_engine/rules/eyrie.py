@@ -18,6 +18,7 @@ from ..actions import (
 )
 from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
+from . import alliance as alliance_rules
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards
 from .movement import legal_move_destinations, legal_move_sources
@@ -105,6 +106,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
         raise ValueError("No Eyrie warrior at source")
     state.board.warriors[source][Faction.EYRIE] -= 1
     state.board.warriors[action.clearing_id][Faction.EYRIE] += 1
+    alliance_rules.trigger_outrage(state, Faction.EYRIE, action.clearing_id)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     _consume_decree_card(state, "move", state.board.clearings[source].suit)
     state.decision_context.selected_source = None
@@ -310,9 +312,14 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
         state.board.tokens[cid][Faction.MARQUISE] = [
             token for token in state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.KEEP
         ]
+        sympathy_removed = sum(
+            1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY
+        )
         state.board.tokens[cid][Faction.ALLIANCE] = [
             token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
         ]
+        for _ in range(sympathy_removed):
+            alliance_rules.trigger_outrage(state, Faction.EYRIE, cid, require_sympathy_present=False)
 
 
 def _assign_leader_viziers(state: GameState, leader: str) -> None:

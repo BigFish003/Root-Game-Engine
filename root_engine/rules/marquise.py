@@ -16,6 +16,7 @@ from ..actions import (
 )
 from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
+from . import alliance as alliance_rules
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards, spend_marquise_crafting_power
 from .movement import legal_move_destinations, legal_move_sources
@@ -108,6 +109,7 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
         raise ValueError("No Marquise warrior at source")
     state.board.warriors[source][Faction.MARQUISE] -= 1
     state.board.warriors[action.clearing_id][Faction.MARQUISE] += 1
+    alliance_rules.trigger_outrage(state, Faction.MARQUISE, action.clearing_id)
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_source = None
     state.marquise.daylight_actions_used += 1
@@ -161,9 +163,14 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
         state.board.warriors[cid][Faction.ALLIANCE] = 0
         state.board.buildings[cid][Faction.EYRIE].clear()
         state.board.buildings[cid][Faction.ALLIANCE].clear()
+        sympathy_removed = sum(
+            1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY
+        )
         state.board.tokens[cid][Faction.ALLIANCE] = [
             token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
         ]
+        for _ in range(sympathy_removed):
+            alliance_rules.trigger_outrage(state, Faction.MARQUISE, cid, require_sympathy_present=False)
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
