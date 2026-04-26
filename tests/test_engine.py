@@ -109,6 +109,26 @@ def test_turn_progression_via_end_phase() -> None:
     assert engine.get_state().turn.phase == Phase.BIRDSONG
 
 
+def test_can_exclude_a_faction_for_three_player_turn_order() -> None:
+    engine = RootEngine(seed=6, excluded_factions={Faction.VAGABOND})
+    state = engine.get_state()
+
+    assert state.turn.turn_order == [Faction.MARQUISE, Faction.EYRIE, Faction.ALLIANCE]
+    assert state.vagabond.location is None
+    assert state.vagabond.hand == []
+
+    for _ in range(20):
+        actions = engine.get_valid_actions()
+        end_phase = next((a for a in actions if isinstance(a, EndPhase)), None)
+        engine.apply_action(end_phase if end_phase is not None else actions[0])
+        if (
+            engine.get_state().turn.current_faction == Faction.MARQUISE
+            and engine.get_state().turn.round_number == 2
+        ):
+            break
+    assert engine.get_state().turn.current_faction == Faction.MARQUISE
+
+
 def test_deterministic_seed() -> None:
     e1 = RootEngine(seed=42)
     e2 = RootEngine(seed=42)
