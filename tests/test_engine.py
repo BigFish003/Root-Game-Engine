@@ -9,15 +9,24 @@ from root_engine.actions import (
     EndPhase,
     FallIntoTurmoil,
     Recruit,
+    Revolt,
     SelectEyrieLeader,
     SelectMoveDestination,
     SelectMoveSource,
+    SpreadSympathy,
 )
 from root_engine.engine import RootEngine
 from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
 from root_engine.rules import alliance as alliance_rules
 from root_engine.rules import combat as combat_rules
 from root_engine.rules import eyrie as eyrie_rules
+
+
+def _advance_to_alliance_birdsong(engine: RootEngine) -> None:
+    while engine.get_state().turn.current_faction != Faction.ALLIANCE:
+        actions = engine.get_valid_actions()
+        end_phase = next((a for a in actions if isinstance(a, EndPhase)), None)
+        engine.apply_action(end_phase if end_phase is not None else actions[0])
 
 
 def test_reset_initial_state_has_expected_markers() -> None:
@@ -384,3 +393,78 @@ def test_alliance_supporters_capacity_without_base_is_five() -> None:
     card_id = 6
     assert alliance_rules.gain_supporter(state, card_id) is False
     assert card_id in state.discard_pile
+
+
+def test_alliance_birdsong_offers_revolt_and_sympathy_actions() -> None:
+    engine = RootEngine(seed=71)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:2]
+    state.alliance.supporters = list(bird_supporters)
+
+    actions = engine.get_valid_actions()
+    assert any(isinstance(a, Revolt) and a.clearing_id == 2 for a in actions)
+    assert any(isinstance(a, SpreadSympathy) for a in actions)
+
+
+def test_alliance_revolt_removes_enemy_pieces_places_base_and_officer() -> None:
+    engine = RootEngine(seed=73)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.board.tokens[5][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.alliance.sympathy_in_supply = 8
+    rabbit_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT][:2]
+    state.alliance.supporters = list(rabbit_supporters)
+    state.board.warriors[2][Faction.MARQUISE] = 2
+    state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
+    state.board.tokens[2][Faction.MARQUISE].append(TokenType.WOOD)
+    before_score = state.scores[Faction.ALLIANCE]
+
+    engine.apply_action(Revolt(clearing_id=2))
+
+    assert state.alliance.bases[Suit.RABBIT] is True
+    assert BuildingType.BASE in state.board.buildings[2][Faction.ALLIANCE]
+    assert state.board.warriors[2][Faction.MARQUISE] == 0
+    assert state.board.buildings[2][Faction.MARQUISE] == []
+    assert state.board.tokens[2][Faction.MARQUISE] == []
+    assert state.board.warriors[2][Faction.ALLIANCE] == 2
+    assert state.alliance.officers == 1
+    assert state.scores[Faction.ALLIANCE] == before_score + 3
+
+
+def test_alliance_spread_sympathy_accounts_for_martial_law_cost() -> None:
+    engine = RootEngine(seed=79)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.alliance.sympathy_in_supply = 9
+    mouse_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE][:3]
+    state.alliance.supporters = list(mouse_supporters)
+    state.board.warriors[3][Faction.MARQUISE] = 3
+    before_score = state.scores[Faction.ALLIANCE]
+
+    engine.apply_action(SpreadSympathy(clearing_id=3))
+
+    assert TokenType.SYMPATHY in state.board.tokens[3][Faction.ALLIANCE]
+    assert len(state.alliance.supporters) == 0
+    assert state.scores[Faction.ALLIANCE] == before_score + 1
+
+
+def test_alliance_can_spread_sympathy_multiple_times_in_birdsong_if_legal() -> None:
+    engine = RootEngine(seed=83)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:5]
+    state.alliance.supporters = list(bird_supporters)
+    state.alliance.sympathy_in_supply = 10
+
+    first_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    engine.apply_action(first_spread)
+    assert engine.get_state().turn.phase == Phase.BIRDSONG
+    assert any(isinstance(a, SpreadSympathy) for a in engine.get_valid_actions())
+
+    second_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    engine.apply_action(second_spread)
+    assert engine.get_state().turn.phase == Phase.BIRDSONG
