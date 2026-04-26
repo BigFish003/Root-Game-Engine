@@ -462,6 +462,40 @@ def test_eyrie_turmoil_causes_bird_card_point_loss_and_moves_to_evening() -> Non
     assert all(not isinstance(action, Recruit) for action in engine.get_valid_actions())
 
 
+def test_eyrie_does_not_reinitialize_decree_after_finishing_all_cards() -> None:
+    engine = RootEngine(seed=52)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    state.eyrie.decree = {"recruit": [4], "move": [-102], "battle": [], "build": [-104]}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [4],
+        "move": [-102],
+        "battle": [],
+        "build": [-104],
+    }
+    state.eyrie.warriors_in_supply = 20
+    state.eyrie.birdsong_cards_added = 1
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+    move_source = next(action for action in engine.get_valid_actions() if isinstance(action, SelectMoveSource))
+    engine.apply_action(move_source)
+    destination_actions = [action for action in engine.get_valid_actions() if isinstance(action, SelectMoveDestination)]
+    move_destination = max(destination_actions, key=lambda action: action.warriors)
+    engine.apply_action(move_destination)
+    build = next(action for action in engine.get_valid_actions() if isinstance(action, Build))
+    engine.apply_action(build)
+
+    actions = engine.get_valid_actions()
+    assert any(isinstance(action, EndPhase) for action in actions)
+    assert not any(isinstance(action, FallIntoTurmoil) for action in actions)
+
+
 def test_eyrie_lords_of_the_forest_rules_ties_but_not_empty_clearings() -> None:
     engine = RootEngine(seed=43)
     state = engine.get_state()
