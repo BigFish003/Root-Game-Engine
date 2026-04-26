@@ -391,6 +391,24 @@ class state_renderer:
                     draw.text((left + 16, y), f"- {card_label(card_id)}", fill="black", font=small_font)
                     y += 14
 
+        def draw_discard_pile_panel(panel_rect: tuple[int, int, int, int]) -> None:
+            left, top, right, bottom = panel_rect
+            draw.rectangle(panel_rect, fill=(238, 238, 238), outline="black", width=2)
+            draw.text((left + 8, top + 6), "Discard Pile", fill="black", font=font_bold)
+
+            discard_pile = state_dictionary.get("cards", {}).get("discard_pile", []) or []
+            draw.text((left + 8, top + 24), f"Cards: {len(discard_pile)}", fill="black", font=font)
+
+            preview = discard_pile[-3:]
+            preview_y = top + 40
+            if not preview:
+                draw.text((left + 8, preview_y), "(empty)", fill="black", font=small_font)
+                return
+
+            labels = [card_label(card_id) for card_id in reversed(preview)]
+            preview_text = ", ".join(labels)
+            draw.text((left + 8, preview_y), f"Top: {preview_text}", fill="black", font=small_font)
+
         state_dictionary = self.build_state_dictionary(observation)
 
         img = Image.new("RGB", (800, 600), color="white")
@@ -429,6 +447,7 @@ class state_renderer:
         draw.rectangle((0, 0, 550, 350), fill=(85, 107, 85), outline="black", width=3)
         private_panel_rect = (550, 0, 800, 350)
         draw_observer_private_panel(private_panel_rect)
+        draw_discard_pile_panel((600, 300, 800, 350))
 
         clearing_positions: dict[int, tuple[int, int]] = {
             1: (90, 45),
