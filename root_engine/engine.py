@@ -13,6 +13,8 @@ from .actions import (
     EndDecision,
     EndPhase,
     FallIntoTurmoil,
+    Mobilize,
+    Organize,
     Recruit,
     Revolt,
     SelectEyrieLeader,
@@ -21,6 +23,7 @@ from .actions import (
     SelectMoveDestination,
     SelectMoveSource,
     SpreadSympathy,
+    Train,
 )
 from .enums import DecisionType, Faction
 from .models import GameState
@@ -139,3 +142,21 @@ class RootEngine:
             alliance.apply_revolt(self._state, action)
         elif isinstance(action, SpreadSympathy):
             alliance.apply_spread_sympathy(self._state, action)
+        elif isinstance(action, Craft):
+            alliance.apply_craft(self._state, action)
+        elif isinstance(action, Mobilize):
+            alliance.apply_mobilize(self._state, action)
+        elif isinstance(action, Train):
+            alliance.apply_train(self._state, action)
+        elif isinstance(action, SelectMoveSource):
+            alliance.apply_move_source(self._state, action)
+        elif isinstance(action, SelectMoveDestination):
+            alliance.apply_move_destination(self._state, action)
+        elif isinstance(action, SelectBattleClearing):
+            alliance.apply_battle_select_clearing(self._state, action)
+        elif isinstance(action, SelectBattleTarget):
+            alliance.apply_battle_select_target(self._state, action)
+        elif isinstance(action, Recruit):
+            alliance.apply_recruit(self._state, action)
+        elif isinstance(action, Organize):
+            alliance.apply_organize(self._state, action)

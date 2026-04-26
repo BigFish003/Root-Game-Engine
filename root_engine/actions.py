@@ -97,3 +97,18 @@ class Revolt(Action):
 @dataclass(frozen=True)
 class SpreadSympathy(Action):
     clearing_id: int
+
+
+@dataclass(frozen=True)
+class Mobilize(Action):
+    card_id: int
+
+
+@dataclass(frozen=True)
+class Train(Action):
+    card_id: int
+
+
+@dataclass(frozen=True)
+class Organize(Action):
+    clearing_id: int
