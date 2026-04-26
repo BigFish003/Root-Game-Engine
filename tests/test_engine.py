@@ -404,8 +404,22 @@ def test_alliance_birdsong_offers_revolt_and_sympathy_actions() -> None:
     state.alliance.supporters = list(bird_supporters)
 
     actions = engine.get_valid_actions()
+    assert isinstance(actions[0], EndPhase)
     assert any(isinstance(a, Revolt) and a.clearing_id == 2 for a in actions)
     assert any(isinstance(a, SpreadSympathy) for a in actions)
+
+
+def test_eyrie_birdsong_end_phase_is_prioritized_when_available() -> None:
+    engine = RootEngine(seed=97)
+    engine.apply_action(EndPhase())
+    engine.apply_action(EndPhase())
+    engine.apply_action(EndPhase())
+    engine.get_state().eyrie.birdsong_cards_added = 1
+
+    actions = engine.get_valid_actions()
+
+    assert any(isinstance(action, EndPhase) for action in actions)
+    assert isinstance(actions[0], EndPhase)
 
 
 def test_alliance_revolt_removes_enemy_pieces_places_base_and_officer() -> None:
