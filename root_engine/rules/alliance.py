@@ -150,6 +150,8 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("Alliance recruit can only be taken in Evening")
     if action.clearing_id not in _legal_evening_recruit_clearings(state):
         raise ValueError("Can only recruit in a clearing with a base")
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if _alliance_warriors_in_supply(state) <= 0:
         raise ValueError("No Alliance warriors in supply")
     state.board.warriors[action.clearing_id][Faction.ALLIANCE] += 1
@@ -161,6 +163,8 @@ def apply_organize(state: GameState, action: Organize) -> None:
         raise ValueError("Organize can only be taken in Evening")
     if action.clearing_id not in _legal_organize_clearings(state):
         raise ValueError("Organize requires an Alliance warrior in an unsympathetic clearing")
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
     state.board.warriors[action.clearing_id][Faction.ALLIANCE] -= 1
     state.board.tokens[action.clearing_id][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     state.alliance.sympathy_in_supply -= 1
@@ -169,6 +173,8 @@ def apply_organize(state: GameState, action: Organize) -> None:
 
 
 def apply_revolt(state: GameState, action: Revolt) -> None:
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
     clearing = state.board.clearings[action.clearing_id]
     suit = clearing.suit
     if suit not in {Suit.FOX, Suit.RABBIT, Suit.MOUSE}:
@@ -195,6 +201,8 @@ def apply_revolt(state: GameState, action: Revolt) -> None:
 
 
 def apply_spread_sympathy(state: GameState, action: SpreadSympathy) -> None:
+    if action.clearing_id == state.marquise.keep_clearing:
+        raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if TokenType.SYMPATHY in state.board.tokens[action.clearing_id][Faction.ALLIANCE]:
         raise ValueError("Clearing already sympathetic")
     if action.clearing_id not in _legal_sympathy_clearings(state):
@@ -299,6 +307,7 @@ def _legal_evening_recruit_clearings(state: GameState) -> list[int]:
     return [
         cid
         for cid, buildings in state.board.buildings.items()
+        if cid != state.marquise.keep_clearing
         if any(building == BuildingType.BASE for building in buildings[Faction.ALLIANCE])
     ]
 
@@ -309,6 +318,7 @@ def _legal_organize_clearings(state: GameState) -> list[int]:
     return [
         cid
         for cid in state.board.clearings
+        if cid != state.marquise.keep_clearing
         if state.board.warriors[cid][Faction.ALLIANCE] > 0
         and TokenType.SYMPATHY not in state.board.tokens[cid][Faction.ALLIANCE]
     ]
@@ -317,6 +327,8 @@ def _legal_organize_clearings(state: GameState) -> list[int]:
 def _legal_revolt_clearings(state: GameState) -> list[int]:
     clearings: list[int] = []
     for cid, clearing in state.board.clearings.items():
+        if cid == state.marquise.keep_clearing:
+            continue
         suit = clearing.suit
         if suit not in {Suit.FOX, Suit.RABBIT, Suit.MOUSE}:
             continue
@@ -346,6 +358,8 @@ def _legal_sympathy_clearings(state: GameState) -> list[int]:
         candidates = set(state.board.clearings.keys())
     legal: list[int] = []
     for cid in sorted(candidates):
+        if cid == state.marquise.keep_clearing:
+            continue
         suit = state.board.clearings[cid].suit
         cost = _sympathy_supporter_cost(state) + (1 if _has_martial_law(state, cid) else 0)
         if _can_spend_supporters(state, suit, cost):
@@ -446,8 +460,13 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
             continue
         state.board.warriors[cid][Faction.MARQUISE] = 0
         state.board.warriors[cid][Faction.EYRIE] = 0
+        removed_buildings = len(state.board.buildings[cid][Faction.MARQUISE]) + len(
+            state.board.buildings[cid][Faction.EYRIE]
+        )
         state.board.buildings[cid][Faction.MARQUISE].clear()
         state.board.buildings[cid][Faction.EYRIE].clear()
+        removed_tokens = sum(1 for token in state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.WOOD)
         state.board.tokens[cid][Faction.MARQUISE] = [
             token for token in state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.WOOD
         ]
+        state.scores[Faction.ALLIANCE] += removed_buildings + removed_tokens

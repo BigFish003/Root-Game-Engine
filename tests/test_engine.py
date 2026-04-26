@@ -532,6 +532,38 @@ def test_keep_blocks_non_marquise_piece_placement() -> None:
     assert keep is not None
     with pytest.raises(ValueError):
         eyrie_rules.apply_recruit(state, Recruit(clearing_id=keep))
+    with pytest.raises(ValueError):
+        eyrie_rules.apply_build(state, Build(clearing_id=keep, building_type=BuildingType.ROOST))
+
+
+def test_keep_blocks_alliance_piece_placement_actions() -> None:
+    engine = RootEngine(seed=211)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    keep = state.marquise.keep_clearing
+    assert keep is not None
+    keep_suit = state.board.clearings[keep].suit
+    if keep_suit not in {Suit.FOX, Suit.RABBIT, Suit.MOUSE}:
+        pytest.skip("Keep clearing must be fox/rabbit/mouse for revolt test setup")
+
+    state.board.tokens[keep][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    suit_supporters = [cid for cid, card in state.cards.items() if card.suit in (keep_suit, Suit.BIRD)]
+    state.alliance.supporters = suit_supporters[:4]
+
+    with pytest.raises(ValueError):
+        alliance_rules.apply_spread_sympathy(state, SpreadSympathy(clearing_id=keep))
+    with pytest.raises(ValueError):
+        alliance_rules.apply_revolt(state, Revolt(clearing_id=keep))
+
+    state.turn.phase = Phase.EVENING
+    state.alliance.officers = 1
+    state.board.warriors[keep][Faction.ALLIANCE] = 1
+    with pytest.raises(ValueError):
+        alliance_rules.apply_organize(state, Organize(clearing_id=keep))
+
+    state.board.buildings[keep][Faction.ALLIANCE].append(BuildingType.BASE)
+    with pytest.raises(ValueError):
+        alliance_rules.apply_recruit(state, Recruit(clearing_id=keep))
 
 
 def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep() -> None:
@@ -811,3 +843,78 @@ def test_outrage_on_sympathy_removal_draws_when_no_matching_cards() -> None:
     combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, 2)
 
     assert top_card in state.alliance.supporters
+
+
+def test_favor_scores_for_removed_tokens_and_buildings() -> None:
+    marquise_engine = RootEngine(seed=801)
+    marquise_state = marquise_engine.get_state()
+    for cid, clearing in marquise_state.board.clearings.items():
+        if clearing.suit == Suit.MOUSE:
+            marquise_state.board.buildings[cid][Faction.EYRIE].clear()
+            marquise_state.board.buildings[cid][Faction.ALLIANCE].clear()
+            marquise_state.board.tokens[cid][Faction.ALLIANCE] = [
+                token for token in marquise_state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+            ]
+    marquise_state.board.clearings[2].suit = Suit.MOUSE
+    marquise_state.board.buildings[2][Faction.EYRIE].append(BuildingType.ROOST)
+    marquise_state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    expected_marquise_delta = sum(
+        len(marquise_state.board.buildings[cid][Faction.EYRIE])
+        + len(marquise_state.board.buildings[cid][Faction.ALLIANCE])
+        + sum(1 for token in marquise_state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY)
+        for cid, clearing in marquise_state.board.clearings.items()
+        if clearing.suit == Suit.MOUSE
+    )
+    before_marquise_score = marquise_state.scores[Faction.MARQUISE]
+    marquise_rules._resolve_favor(marquise_state, Suit.MOUSE)
+    assert marquise_state.scores[Faction.MARQUISE] == before_marquise_score + expected_marquise_delta
+
+    eyrie_engine = RootEngine(seed=802)
+    eyrie_state = eyrie_engine.get_state()
+    for cid, clearing in eyrie_state.board.clearings.items():
+        if clearing.suit == Suit.MOUSE:
+            eyrie_state.board.buildings[cid][Faction.MARQUISE].clear()
+            eyrie_state.board.buildings[cid][Faction.ALLIANCE].clear()
+            eyrie_state.board.tokens[cid][Faction.MARQUISE] = [
+                token for token in eyrie_state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.KEEP
+            ]
+            eyrie_state.board.tokens[cid][Faction.ALLIANCE] = [
+                token for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+            ]
+    eyrie_state.board.clearings[2].suit = Suit.MOUSE
+    eyrie_state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
+    eyrie_state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    expected_eyrie_delta = sum(
+        len(eyrie_state.board.buildings[cid][Faction.MARQUISE])
+        + len(eyrie_state.board.buildings[cid][Faction.ALLIANCE])
+        + sum(1 for token in eyrie_state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.KEEP)
+        + sum(1 for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY)
+        for cid, clearing in eyrie_state.board.clearings.items()
+        if clearing.suit == Suit.MOUSE
+    )
+    before_eyrie_score = eyrie_state.scores[Faction.EYRIE]
+    eyrie_rules._resolve_favor(eyrie_state, Suit.MOUSE)
+    assert eyrie_state.scores[Faction.EYRIE] == before_eyrie_score + expected_eyrie_delta
+
+    alliance_engine = RootEngine(seed=803)
+    alliance_state = alliance_engine.get_state()
+    for cid, clearing in alliance_state.board.clearings.items():
+        if clearing.suit == Suit.MOUSE:
+            alliance_state.board.buildings[cid][Faction.MARQUISE].clear()
+            alliance_state.board.buildings[cid][Faction.EYRIE].clear()
+            alliance_state.board.tokens[cid][Faction.MARQUISE] = [
+                token for token in alliance_state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.WOOD
+            ]
+    alliance_state.board.clearings[2].suit = Suit.MOUSE
+    alliance_state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
+    alliance_state.board.tokens[2][Faction.MARQUISE].append(TokenType.WOOD)
+    expected_alliance_delta = sum(
+        len(alliance_state.board.buildings[cid][Faction.MARQUISE])
+        + len(alliance_state.board.buildings[cid][Faction.EYRIE])
+        + sum(1 for token in alliance_state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.WOOD)
+        for cid, clearing in alliance_state.board.clearings.items()
+        if clearing.suit == Suit.MOUSE
+    )
+    before_alliance_score = alliance_state.scores[Faction.ALLIANCE]
+    alliance_rules._resolve_favor(alliance_state, Suit.MOUSE)
+    assert alliance_state.scores[Faction.ALLIANCE] == before_alliance_score + expected_alliance_delta
