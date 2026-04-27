@@ -21,7 +21,7 @@ class MCTSNode:
 
     def __post_init__(self) -> None:
         if not self.untried_actions:
-            self.untried_actions = list(self.engine.get_valid_actions())
+            self.untried_actions = list(self.engine.get_valid_actions()) if self.is_root_turn() else []
 
     @property
     def average_value(self) -> float:
@@ -31,6 +31,12 @@ class MCTSNode:
 
     def is_fully_expanded(self) -> bool:
         return len(self.untried_actions) == 0
+
+    def is_root_turn(self) -> bool:
+        return self.engine.get_state().turn.current_faction == self.root_faction
+
+    def is_terminal_for_search(self) -> bool:
+        return self.engine.is_terminal() or not self.is_root_turn()
 
     def best_uct_child(self, exploration: float) -> "MCTSNode":
         log_parent = math.log(max(1, self.visits))
@@ -57,6 +63,11 @@ class MCTSAgent:
         self.rng = random.Random(rng_seed)
 
     def choose_action(self, engine: RootEngine, root_faction: Faction) -> object:
+        if engine.get_state().turn.current_faction != root_faction:
+            raise RuntimeError(
+                f"Cannot choose action for {root_faction.value}; current turn is "
+                f"{engine.get_state().turn.current_faction.value}."
+            )
         root = MCTSNode(engine=engine.clone(), root_faction=root_faction)
         if not root.untried_actions:
             raise RuntimeError("No valid actions available at root")
@@ -71,12 +82,12 @@ class MCTSAgent:
         return best_child.action_taken
 
     def _select(self, node: MCTSNode) -> MCTSNode:
-        while node.children and node.is_fully_expanded() and not node.engine.is_terminal():
+        while node.children and node.is_fully_expanded() and not node.is_terminal_for_search():
             node = node.best_uct_child(self.exploration)
         return node
 
     def _expand(self, node: MCTSNode) -> MCTSNode:
-        if node.engine.is_terminal() or not node.untried_actions:
+        if node.is_terminal_for_search() or not node.untried_actions:
             return node
 
         action = node.untried_actions.pop(self.rng.randrange(len(node.untried_actions)))
@@ -96,7 +107,7 @@ class MCTSAgent:
         sim = node.engine.clone()
 
         for _ in range(self.max_rollout_steps):
-            if sim.is_terminal():
+            if sim.is_terminal() or sim.get_state().turn.current_faction != node.root_faction:
                 break
             actions = sim.get_valid_actions()
             if not actions:
@@ -125,10 +136,13 @@ def run_demo() -> None:
     root_faction = engine.get_state().turn.current_faction
     agent = MCTSAgent(iterations=500, max_rollout_steps=80, rng_seed=7)
 
-    action = agent.choose_action(engine, root_faction)
-    print(f"MCTS selected action for {root_faction.value}: {action}")
-
-    engine.apply_action(action)
+    for _ in range(4):
+        if engine.get_state().turn.current_faction != root_faction:
+            print(f"Stopping demo: turn passed to {engine.get_state().turn.current_faction.value}.")
+            break
+        action = agent.choose_action(engine, root_faction)
+        print(f"MCTS selected action for {root_faction.value}: {action}")
+        engine.apply_action(action)
 
 
 if __name__ == "__main__":
