@@ -49,8 +49,9 @@ class Node:
     def rollout(self):
         while self.state.get_state().turn.current_faction == self.faction:
             self.state.apply_action(self.choose_random_action())
+        score = self.state.get_state().scores[self.faction]
+        self.T = ((self.T * self.N) + score )/(self.N+1)
         self.N += 1
-        return 0
 
 ground_state = RootEngine(seed=7)
 node = Node(None, ground_state, ground_state.get_state().turn.current_faction)

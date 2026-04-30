@@ -15,7 +15,6 @@ print(engine.get_valid_actions())
 
 actions = [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, -1, 0, 0, 0, 2, 0, 0, 5, 0, 0, 0, 0, 0]
 r = True
-
 for i in range(len(actions)):
     valid_actions = engine.get_valid_actions()
     print(len(valid_actions))
