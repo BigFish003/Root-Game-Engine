@@ -28,6 +28,7 @@ from .actions import (
 from .enums import DecisionType, Faction
 from .models import GameState
 from .observation import Observation, build_observation
+from .ai.marquise_ai import SearchConfig, choose_action as choose_marquise_action
 from .rules import alliance, base_rules, eyrie, marquise
 from .rules.scoring import WINNING_SCORE
 from .state import clone_state, create_initial_state
@@ -42,12 +43,22 @@ class RootEngine:
         self,
         seed: Optional[int] = None,
         excluded_factions: Optional[set[Faction]] = None,
+        marquise_ai_enabled: bool = False,
+        marquise_ai_max_depth: int = 3,
+        marquise_ai_branch_factor: int = 5,
     ) -> None:
         self._excluded_factions = set(excluded_factions or set())
+        self._marquise_ai_enabled = marquise_ai_enabled
+        self._marquise_ai_config = SearchConfig(
+            max_depth=marquise_ai_max_depth,
+            branch_factor=marquise_ai_branch_factor,
+        )
         self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
+        self._auto_play_ai_turns_if_enabled()
 
     def reset(self, seed: int | None = None) -> GameState:
         self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
+        self._auto_play_ai_turns_if_enabled()
         return self._state
 
     def get_state(self) -> GameState:
@@ -86,12 +97,18 @@ class RootEngine:
         else:
             raise ValueError("Current faction action handlers are not implemented yet")
 
+        self._auto_play_ai_turns_if_enabled()
+
     def clone(self) -> "RootEngine":
         clone = RootEngine(
             seed=self._state.seed,
             excluded_factions=set(self._excluded_factions),
+            marquise_ai_enabled=False,
+            marquise_ai_max_depth=self._marquise_ai_config.max_depth,
+            marquise_ai_branch_factor=self._marquise_ai_config.branch_factor,
         )
         clone._state = clone_state(self._state)
+        clone._marquise_ai_enabled = self._marquise_ai_enabled
         return clone
 
     def is_terminal(self) -> bool:
@@ -107,6 +124,41 @@ class RootEngine:
 
     def pretty_print(self) -> str:
         return format_state(self._state)
+
+
+    def set_marquise_ai_enabled(self, enabled: bool) -> None:
+        self._marquise_ai_enabled = enabled
+        self._auto_play_ai_turns_if_enabled()
+
+    def _auto_play_ai_turns_if_enabled(self) -> None:
+        if not self._marquise_ai_enabled:
+            return
+
+        steps = 0
+        while not self.is_terminal() and self._state.turn.current_faction == Faction.MARQUISE:
+            steps += 1
+            if steps > 200:
+                return
+            valid_actions = self.get_valid_actions()
+            if not valid_actions:
+                return
+            chosen_action = choose_marquise_action(self, self._marquise_ai_config)
+            if not any(a == chosen_action for a in valid_actions):
+                chosen_action = valid_actions[0]
+
+            if isinstance(chosen_action, EndDecision):
+                self._state.decision_context = replace(
+                    self._state.decision_context,
+                    decision_type=DecisionType.MAIN_ACTION,
+                    selected_source=None,
+                    selected_destination=None,
+                    selected_battle_clearing=None,
+                    pending_moves_remaining=0,
+                )
+            elif isinstance(chosen_action, EndPhase):
+                base_rules.advance_phase(self._state)
+            else:
+                self._apply_marquise_action(chosen_action)
 
     def _apply_marquise_action(self, action) -> None:
         if isinstance(action, Recruit):
