@@ -58,4 +58,3 @@ class Node:
             node.N += 1
             node = node.parent
 
-
