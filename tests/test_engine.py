@@ -933,3 +933,22 @@ def test_marquise_ai_autoplays_until_turn_ends_when_enabled() -> None:
     state = engine.get_state()
 
     assert state.turn.current_faction != Faction.MARQUISE
+
+
+def test_eyrie_ai_toggle_off_has_no_autoplay() -> None:
+    engine = RootEngine(seed=41, eyrie_ai_enabled=False)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.EYRIE
+
+    assert state.turn.current_faction == Faction.EYRIE
+
+
+def test_eyrie_ai_autoplays_until_turn_ends_when_enabled() -> None:
+    engine = RootEngine(seed=41, eyrie_ai_enabled=True)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.EYRIE
+    state.turn.phase = Phase.BIRDSONG
+
+    engine.set_eyrie_ai_enabled(True)
+
+    assert state.turn.current_faction != Faction.EYRIE

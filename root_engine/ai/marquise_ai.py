@@ -28,7 +28,7 @@ def choose_action(engine: Any, config: SearchConfig) -> Any:
     best_action = valid_actions[0]
     for action in valid_actions[: config.branch_factor]:
         sim = engine.clone()
-        sim.set_marquise_ai_enabled(False)
+        sim._marquise_ai_enabled = False
         sim.apply_action(action)
         score = _evaluate_position(sim.get_state()) + _action_bias(action)
         if score > best_score:
