@@ -918,3 +918,18 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
     before_alliance_score = alliance_state.scores[Faction.ALLIANCE]
     alliance_rules._resolve_favor(alliance_state, Suit.MOUSE)
     assert alliance_state.scores[Faction.ALLIANCE] == before_alliance_score + expected_alliance_delta
+
+
+def test_marquise_ai_toggle_off_has_no_autoplay() -> None:
+    engine = RootEngine(seed=31, marquise_ai_enabled=False)
+    state = engine.get_state()
+
+    assert state.turn.current_faction == Faction.MARQUISE
+    assert state.turn.phase == Phase.BIRDSONG
+
+
+def test_marquise_ai_autoplays_until_turn_ends_when_enabled() -> None:
+    engine = RootEngine(seed=31, marquise_ai_enabled=True)
+    state = engine.get_state()
+
+    assert state.turn.current_faction != Faction.MARQUISE
