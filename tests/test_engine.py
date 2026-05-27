@@ -735,6 +735,21 @@ def test_alliance_sympathy_vp_track_progression(tokens_on_map: int, expected_vp_
     assert alliance_rules._sympathy_vp_reward(state) == expected_vp_reward
 
 
+def test_alliance_spend_supporters_prefers_non_bird_cards() -> None:
+    engine = RootEngine(seed=102)
+    state = engine.get_state()
+    target_suit = Suit.RABBIT
+    rabbit_cards = [cid for cid, card in state.cards.items() if card.suit == target_suit][:2]
+    bird_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.BIRD)
+    state.alliance.supporters = [bird_card, rabbit_cards[0], rabbit_cards[1]]
+
+    alliance_rules._spend_supporters(state, target_suit, 2)
+
+    assert state.alliance.supporters == [bird_card]
+    assert rabbit_cards[0] in state.discard_pile
+    assert rabbit_cards[1] in state.discard_pile
+
+
 def test_alliance_daylight_offers_craft_mobilize_and_train() -> None:
     engine = RootEngine(seed=103)
     _advance_to_alliance_birdsong(engine)
