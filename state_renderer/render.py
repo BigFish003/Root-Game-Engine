@@ -309,7 +309,9 @@ class state_renderer:
             sympathy_slots = 10
             sympathy_remaining = int(public_data.get("sympathy_in_supply", 0))
             track_x = board_rect[2] - 28
-            track_start_y = cursor_y
+            track_height = sympathy_slots * 17 - 2
+            max_track_start_y = board_rect[3] - 58 - 6 - track_height
+            track_start_y = min(cursor_y, max_track_start_y)
             for slot_idx in range(sympathy_slots):
                 slot_top = track_start_y + slot_idx * 17
                 draw.rectangle((track_x, slot_top, track_x + 18, slot_top + 15), outline="black", width=1)
