@@ -2,9 +2,31 @@ from __future__ import annotations
 import math
 import random
 import copy
-from root_engine.engine import RootEngine
-from root_engine.enums import Faction
+from dataclasses import dataclass
 from typing import Dict, Optional, Any
+
+import torch
+
+from NN.allianceNN import AllianceNN
+from root_engine.actions import (
+    Build,
+    Craft,
+    EndDecision,
+    EndPhase,
+    Mobilize,
+    Organize,
+    Recruit,
+    ResolveMove,
+    Revolt,
+    SelectBattleClearing,
+    SelectBattleTarget,
+    SelectMoveDestination,
+    SelectMoveSource,
+    SpreadSympathy,
+    Train,
+)
+from root_engine.engine import RootEngine
+from root_engine.enums import BuildingType, Faction
 
 c = 1.0
 
@@ -59,6 +81,78 @@ class Node:
             node = node.parent
 
 
-base = engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
+@dataclass(frozen=True)
+class ActionIndex:
+    actions: list[Any]
+    lookup: dict[Any, int]
+
+
+def build_alliance_action_index() -> ActionIndex:
+    clearings = range(1, 13)
+    factions = (Faction.MARQUISE, Faction.EYRIE, Faction.VAGABOND)
+    building_types = (BuildingType.FOX_BASE, BuildingType.RABBIT_BASE, BuildingType.MOUSE_BASE)
+    card_ids = range(54)
+
+    actions: list[Any] = [EndPhase(), EndDecision()]
+
+    for cid in clearings:
+        actions.extend(
+            [
+                Recruit(cid),
+                Revolt(cid),
+                SpreadSympathy(cid),
+                Organize(cid),
+                SelectMoveSource(cid),
+                SelectBattleClearing(cid),
+            ]
+        )
+        for building in building_types:
+            actions.append(Build(cid, building))
+        for warriors in range(1, 11):
+            actions.append(SelectMoveDestination(cid, warriors=warriors))
+        actions.append(ResolveMove(warriors=1))
+
+    for faction in factions:
+        actions.append(SelectBattleTarget(faction.value))
+
+    for card_id in card_ids:
+        actions.extend([Craft(card_id), Mobilize(card_id), Train(card_id)])
+
+    lookup = {action: i for i, action in enumerate(actions)}
+    return ActionIndex(actions=actions, lookup=lookup)
+
+
+def masked_alliance_policy(engine: RootEngine, model: AllianceNN, action_index: ActionIndex) -> torch.Tensor:
+    """Return a masked categorical policy over a giant fixed Alliance action space."""
+
+    encoded = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
+    policy, _ = model(encoded)
+    logits = torch.log(policy.squeeze(0).clamp_min(1e-12))
+
+    valid_actions = engine.get_valid_actions()
+    valid_indices = [action_index.lookup[action] for action in valid_actions if action in action_index.lookup]
+
+    masked_logits = torch.full_like(logits, float("-inf"))
+    if valid_indices:
+        masked_logits[valid_indices] = logits[valid_indices]
+        masked_policy = torch.softmax(masked_logits, dim=-1)
+        return masked_policy
+
+    # Safety fallback for weird intermediate states.
+    return torch.softmax(logits, dim=-1)
+
+
+engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
+action_index = build_alliance_action_index()
+input_dim = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE).numel()
+alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
+
+if engine.get_state().turn.current_faction == Faction.ALLIANCE:
+    masked_policy = masked_alliance_policy(engine, alliance_policy_model, action_index)
+    sampled_index = torch.multinomial(masked_policy, num_samples=1).item()
+    action = action_index.actions[sampled_index]
+    if any(a == action for a in engine.get_valid_actions()):
+        engine.apply_action(action)
+
 for i in range(5000):
     pass
