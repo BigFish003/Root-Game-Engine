@@ -58,3 +58,7 @@ class Node:
             node.N += 1
             node = node.parent
 
+
+base = engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
+for i in range(5000):
+    pass
