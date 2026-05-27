@@ -386,15 +386,21 @@ def _can_spend_supporters(state: GameState, suit: Suit, amount: int) -> bool:
 
 
 def _spend_supporters(state: GameState, suit: Suit, amount: int) -> None:
-    remaining = amount
-    for idx in range(len(state.alliance.supporters) - 1, -1, -1):
-        card_id = state.alliance.supporters[idx]
-        if _supporter_matches_suit(state, card_id, suit):
-            state.discard_pile.append(state.alliance.supporters.pop(idx))
-            remaining -= 1
-            if remaining == 0:
-                return
-    raise ValueError("Insufficient supporters to spend")
+    matching_indices = [
+        idx
+        for idx, card_id in enumerate(state.alliance.supporters)
+        if _supporter_matches_suit(state, card_id, suit)
+    ]
+    non_bird_indices = [idx for idx in matching_indices if state.cards[state.alliance.supporters[idx]].suit != Suit.BIRD]
+    bird_indices = [idx for idx in matching_indices if state.cards[state.alliance.supporters[idx]].suit == Suit.BIRD]
+
+    if len(matching_indices) < amount:
+        raise ValueError("Insufficient supporters to spend")
+
+    indices_to_spend = sorted((non_bird_indices + bird_indices)[:amount], reverse=True)
+    for idx in indices_to_spend:
+        state.discard_pile.append(state.alliance.supporters.pop(idx))
+    return
 
 
 def _remove_enemy_pieces_and_score(state: GameState, clearing_id: int) -> None:
