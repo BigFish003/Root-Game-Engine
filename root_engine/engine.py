@@ -92,9 +92,11 @@ class RootEngine:
                 selected_battle_clearing=None,
                 pending_moves_remaining=0,
             )
+            self._auto_play_ai_turns_if_enabled()
             return
         if isinstance(action, EndPhase):
             base_rules.advance_phase(self._state)
+            self._auto_play_ai_turns_if_enabled()
             return
 
         if faction == Faction.MARQUISE:
