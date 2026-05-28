@@ -895,6 +895,36 @@ def test_defenseless_battle_removes_sympathy_without_attacker_loss() -> None:
     assert state.scores[Faction.MARQUISE] == before_score + 1
 
 
+def test_removed_sympathy_returns_to_supply_after_battle() -> None:
+    engine = RootEngine(seed=705)
+    state = engine.get_state()
+    state.board.warriors[2][Faction.MARQUISE] = 1
+    state.board.warriors[2][Faction.ALLIANCE] = 0
+    state.board.tokens[2][Faction.ALLIANCE] = [TokenType.SYMPATHY]
+    state.alliance.sympathy_in_supply = 9
+
+    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, 2)
+
+    assert TokenType.SYMPATHY not in state.board.tokens[2][Faction.ALLIANCE]
+    assert state.alliance.sympathy_in_supply == 10
+
+
+def test_stale_empty_sympathy_supply_syncs_from_tokens_on_map_before_spreading() -> None:
+    engine = RootEngine(seed=706)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    for cid in range(1, 8):
+        state.board.tokens[cid][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.alliance.sympathy_in_supply = 0
+    state.alliance.supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:4]
+
+    spread = next(action for action in engine.get_valid_actions() if isinstance(action, SpreadSympathy))
+    engine.apply_action(spread)
+
+    assert state.alliance.sympathy_in_supply == 2
+    assert alliance_rules._sympathy_tokens_on_map(state) == 8
+
+
 def test_battle_only_scores_for_cardboard_not_warriors() -> None:
     engine = RootEngine(seed=704)
     state = engine.get_state()
@@ -959,8 +989,10 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
         if clearing.suit == Suit.MOUSE
     )
     before_marquise_score = marquise_state.scores[Faction.MARQUISE]
+    marquise_state.alliance.sympathy_in_supply = 9
     marquise_rules._resolve_favor(marquise_state, Suit.MOUSE)
     assert marquise_state.scores[Faction.MARQUISE] == before_marquise_score + expected_marquise_delta
+    assert marquise_state.alliance.sympathy_in_supply == 10
 
     eyrie_engine = RootEngine(seed=802)
     eyrie_state = eyrie_engine.get_state()
@@ -986,8 +1018,10 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
         if clearing.suit == Suit.MOUSE
     )
     before_eyrie_score = eyrie_state.scores[Faction.EYRIE]
+    eyrie_state.alliance.sympathy_in_supply = 9
     eyrie_rules._resolve_favor(eyrie_state, Suit.MOUSE)
     assert eyrie_state.scores[Faction.EYRIE] == before_eyrie_score + expected_eyrie_delta
+    assert eyrie_state.alliance.sympathy_in_supply == 10
 
     alliance_engine = RootEngine(seed=803)
     alliance_state = alliance_engine.get_state()

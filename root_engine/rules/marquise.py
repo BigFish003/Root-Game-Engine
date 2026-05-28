@@ -191,6 +191,8 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
         state.board.tokens[cid][Faction.ALLIANCE] = [
             token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
         ]
+        if sympathy_removed:
+            alliance_rules.sync_sympathy_supply(state)
         state.scores[Faction.MARQUISE] += removed
         for _ in range(sympathy_removed):
             alliance_rules.trigger_outrage(state, Faction.MARQUISE, cid, require_sympathy_present=False)

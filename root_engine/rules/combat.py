@@ -104,6 +104,8 @@ def _remove_defender_cardboard(
         buildings.pop()
         removed += 1
         hits -= 1
+    if sympathy_removed:
+        alliance.sync_sympathy_supply(state)
     for _ in range(sympathy_removed):
         alliance.trigger_outrage(state, attacker, clearing_id, require_sympathy_present=False)
     return removed

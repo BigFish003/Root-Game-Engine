@@ -23,8 +23,13 @@ from .crafting import legal_craft_cards
 from .movement import legal_move_destinations, legal_move_sources
 
 
+TOTAL_SYMPATHY_TOKENS = 10
+
+
 def valid_actions(state: GameState) -> list:
     """Generate Alliance legal actions for all phases."""
+
+    sync_sympathy_supply(state)
 
     if state.turn.phase == Phase.BIRDSONG:
         actions: list = []
@@ -158,15 +163,18 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
 
 
 def apply_organize(state: GameState, action: Organize) -> None:
+    sync_sympathy_supply(state)
     if state.turn.phase != Phase.EVENING:
         raise ValueError("Organize can only be taken in Evening")
     if action.clearing_id not in _legal_organize_clearings(state):
         raise ValueError("Organize requires an Alliance warrior in an unsympathetic clearing")
     if action.clearing_id == state.marquise.keep_clearing:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
+    if state.alliance.sympathy_in_supply <= 0:
+        raise ValueError("No sympathy tokens remaining")
     state.board.warriors[action.clearing_id][Faction.ALLIANCE] -= 1
     state.board.tokens[action.clearing_id][Faction.ALLIANCE].append(TokenType.SYMPATHY)
-    state.alliance.sympathy_in_supply -= 1
+    sync_sympathy_supply(state)
     state.scores[Faction.ALLIANCE] += _sympathy_vp_reward(state)
     _use_military_operation(state)
 
@@ -202,6 +210,7 @@ def apply_revolt(state: GameState, action: Revolt) -> None:
 
 
 def apply_spread_sympathy(state: GameState, action: SpreadSympathy) -> None:
+    sync_sympathy_supply(state)
     if action.clearing_id == state.marquise.keep_clearing:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if TokenType.SYMPATHY in state.board.tokens[action.clearing_id][Faction.ALLIANCE]:
@@ -218,7 +227,7 @@ def apply_spread_sympathy(state: GameState, action: SpreadSympathy) -> None:
         raise ValueError("Not enough supporters to spread sympathy")
     _spend_supporters(state, suit, total_cost)
     state.board.tokens[action.clearing_id][Faction.ALLIANCE].append(TokenType.SYMPATHY)
-    state.alliance.sympathy_in_supply -= 1
+    sync_sympathy_supply(state)
     state.scores[Faction.ALLIANCE] += _sympathy_vp_reward(state)
 
 
@@ -314,6 +323,7 @@ def _legal_evening_recruit_clearings(state: GameState) -> list[int]:
 
 
 def _legal_organize_clearings(state: GameState) -> list[int]:
+    sync_sympathy_supply(state)
     if state.turn.phase != Phase.EVENING or state.alliance.sympathy_in_supply <= 0:
         return []
     return [
@@ -345,6 +355,9 @@ def _legal_revolt_clearings(state: GameState) -> list[int]:
 
 
 def _legal_sympathy_clearings(state: GameState) -> list[int]:
+    sync_sympathy_supply(state)
+    if state.alliance.sympathy_in_supply <= 0:
+        return []
     sympathetic = {
         cid
         for cid in state.board.clearings
@@ -430,6 +443,12 @@ def _alliance_warriors_in_supply(state: GameState) -> int:
     placed = sum(state.board.warriors[cid][Faction.ALLIANCE] for cid in state.board.clearings)
     placed += state.alliance.officers
     return max(0, 10 - placed)
+
+
+def sync_sympathy_supply(state: GameState) -> None:
+    """Keep the Alliance sympathy supply counter aligned with tokens on the map."""
+
+    state.alliance.sympathy_in_supply = max(0, TOTAL_SYMPATHY_TOKENS - _sympathy_tokens_on_map(state))
 
 
 def _sympathy_supporter_cost(state: GameState) -> int:
