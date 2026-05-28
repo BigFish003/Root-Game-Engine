@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
 import torch
+from sympy.physics.units import current
 
 from NN.allianceNN import AllianceNN
 from root_engine.actions import (
@@ -171,19 +172,20 @@ input_dim = input.numel()
 
 alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
 
-engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
+engine = RootEngine(excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
 render = state_renderer()
+for i in range(5):
+    engine = RootEngine(excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
+    while not engine.is_terminal():
+        input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
+        output = alliance_policy_model(input)
 
-while not engine.is_terminal():
-    input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
-    output = alliance_policy_model(input)
+        valid_actions = engine.get_valid_actions()
+        masked_output = masked_alliance_policy(output, valid_actions, action_index)
+        best_action_idx = masked_output.argmax().item()
+        best_action = action_index.actions[best_action_idx]
 
-    valid_actions = engine.get_valid_actions()
-    masked_output = masked_alliance_policy(output, valid_actions, action_index)
-    best_action_idx = masked_output.argmax().item()
-    best_action = action_index.actions[best_action_idx]
-
-    engine.apply_action(best_action)
-
-render.render_board(engine.get_observation(Faction.ALLIANCE), "game_state.png")
-print(engine.get_state().scores)
+        print(best_action)
+        render.render_board(engine.get_observation(Faction.ALLIANCE), "game_state.png")
+        engine.apply_action(best_action)
+    print(engine.get_state().scores)
