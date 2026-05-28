@@ -90,7 +90,9 @@ class ActionIndex:
 def build_alliance_action_index() -> ActionIndex:
     clearings = range(1, 13)
     factions = (Faction.MARQUISE, Faction.EYRIE, Faction.VAGABOND)
-    building_types = (BuildingType.FOX_BASE, BuildingType.RABBIT_BASE, BuildingType.MOUSE_BASE)
+    # Alliance bases are tracked by clearing suit in AllianceState.bases; the
+    # board only stores a generic BASE building type.
+    building_types = (BuildingType.BASE,)
     card_ids = range(54)
 
     actions: list[Any] = [EndPhase(), EndDecision()]
