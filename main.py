@@ -28,6 +28,8 @@ from root_engine.actions import (
 from root_engine.engine import RootEngine
 from root_engine.enums import BuildingType, Faction
 
+from state_renderer.render import state_renderer
+
 c = 1.0
 
 
@@ -168,13 +170,21 @@ action_index = build_alliance_action_index()
 input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
 input_dim = input.numel()
 
-alliance_policy_model = AllianceNN(
-    input_dim=input_dim, action_dim=len(action_index.actions)
-)
+alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
 
+engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
+render = state_renderer()
 
-for i in range(50):
+while not engine.is_terminal():
     input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
     output = alliance_policy_model(input)
+
     valid_actions = engine.get_valid_actions()
     masked_output = masked_alliance_policy(output, valid_actions, action_index)
+    best_action_idx = masked_output.argmax().item()
+    best_action = action_index.actions[best_action_idx]
+
+    engine.apply_action(best_action)
+
+render.render_board(engine.get_observation(Faction.ALLIANCE), "game_state.png")
+print(engine.get_state().scores)
