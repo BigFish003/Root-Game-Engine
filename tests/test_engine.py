@@ -5,12 +5,15 @@ import pytest
 from root_engine.actions import (
     AddToDecree,
     Build,
+    EndDecision,
     Craft,
     EndPhase,
     FallIntoTurmoil,
     Mobilize,
     Organize,
     Recruit,
+    SelectBattleClearing,
+    SelectBattleTarget,
     Revolt,
     SelectEyrieLeader,
     SelectMoveDestination,
@@ -145,6 +148,38 @@ def test_atomic_move_selection_changes_context_and_board() -> None:
     assert engine.get_state().board.warriors[dest2][Faction.MARQUISE] == dest2_before + 1
     assert engine.get_state().marquise.daylight_actions_used == actions_before + 1
     assert engine.get_state().decision_context.decision_type == DecisionType.MAIN_ACTION
+
+
+def test_atomic_decisions_do_not_offer_end_decision_escape() -> None:
+    engine = RootEngine(seed=404)
+    engine.apply_action(EndPhase())
+
+    move_source = next(action for action in engine.get_valid_actions() if isinstance(action, SelectMoveSource))
+    engine.apply_action(move_source)
+
+    move_actions = engine.get_valid_actions()
+    assert any(isinstance(action, SelectMoveDestination) for action in move_actions)
+    assert all(not isinstance(action, EndDecision) for action in move_actions)
+    with pytest.raises(ValueError, match="Illegal action"):
+        engine.apply_action(EndDecision())
+
+    state = engine.get_state()
+    state.decision_context.decision_type = DecisionType.MAIN_ACTION
+    state.decision_context.selected_source = None
+    state.decision_context.pending_moves_remaining = 0
+    state.board.warriors[2][Faction.MARQUISE] = max(state.board.warriors[2][Faction.MARQUISE], 1)
+    state.board.warriors[2][Faction.EYRIE] = max(state.board.warriors[2][Faction.EYRIE], 1)
+
+    battle_clearing = next(
+        action for action in engine.get_valid_actions() if isinstance(action, SelectBattleClearing)
+    )
+    engine.apply_action(battle_clearing)
+
+    battle_actions = engine.get_valid_actions()
+    assert any(isinstance(action, SelectBattleTarget) for action in battle_actions)
+    assert all(not isinstance(action, EndDecision) for action in battle_actions)
+    with pytest.raises(ValueError, match="Illegal action"):
+        engine.apply_action(EndDecision())
 
 
 def test_turn_progression_via_end_phase() -> None:

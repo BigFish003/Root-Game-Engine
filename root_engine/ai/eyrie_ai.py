@@ -9,7 +9,6 @@ from ..actions import (
     AddToDecree,
     Build,
     Craft,
-    EndDecision,
     EndPhase,
     FallIntoTurmoil,
     Recruit,
@@ -19,7 +18,7 @@ from ..actions import (
     SelectMoveDestination,
     SelectMoveSource,
 )
-from ..enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
+from ..enums import BuildingType, Faction, Phase, Suit
 
 
 @dataclass(frozen=True)
@@ -119,10 +118,6 @@ def _action_bias(action: Any, state: Any) -> float:
     if isinstance(action, AddToDecree):
         return 7 + _decree_add_bias(action, state)
     if isinstance(action, Craft): return 6
-    if isinstance(action, EndDecision):
-        if state.decision_context.decision_type != DecisionType.MAIN_ACTION:
-            return -35
-        return -4
     if isinstance(action, EndPhase): return -14
     if isinstance(action, FallIntoTurmoil): return -40
     return 0

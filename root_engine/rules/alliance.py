@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from ..actions import (
     Craft,
-    EndDecision,
     EndPhase,
     Mobilize,
     Organize,
@@ -56,13 +55,13 @@ def valid_actions(state: GameState) -> list:
         return [
             SelectMoveDestination(cid)
             for cid in legal_move_destinations(state, Faction.ALLIANCE, ctx.selected_source)
-        ] + [EndDecision()]
+        ]
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)
             for f in legal_battle_targets(state, Faction.ALLIANCE, ctx.selected_battle_clearing)
-        ] + [EndDecision()]
-    return [EndDecision()]
+        ]
+    return []
 
 
 def apply_craft(state: GameState, action: Craft) -> None:
