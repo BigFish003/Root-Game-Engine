@@ -197,6 +197,8 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
+    if state.marquise.warriors_in_supply <= 0:
+        return []
     return [
         cid
         for cid, buildings in state.board.buildings.items()
