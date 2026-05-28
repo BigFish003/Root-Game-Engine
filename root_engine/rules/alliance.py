@@ -181,6 +181,8 @@ def apply_revolt(state: GameState, action: Revolt) -> None:
         raise ValueError("Cannot revolt in bird-suit clearing")
     if state.alliance.bases[suit]:
         raise ValueError("Matching base is already built")
+    if BuildingType.BASE in state.board.buildings[action.clearing_id][Faction.ALLIANCE]:
+        raise ValueError("Clearing already has a base")
     if TokenType.SYMPATHY not in state.board.tokens[action.clearing_id][Faction.ALLIANCE]:
         raise ValueError("Can only revolt in a sympathetic clearing")
     if not _can_spend_supporters(state, suit, 2):
@@ -333,6 +335,8 @@ def _legal_revolt_clearings(state: GameState) -> list[int]:
         if suit not in {Suit.FOX, Suit.RABBIT, Suit.MOUSE}:
             continue
         if state.alliance.bases[suit]:
+            continue
+        if BuildingType.BASE in state.board.buildings[cid][Faction.ALLIANCE]:
             continue
         if TokenType.SYMPATHY not in state.board.tokens[cid][Faction.ALLIANCE]:
             continue

@@ -525,6 +525,28 @@ def test_eyrie_disdain_for_trade_scores_one_for_item_craft() -> None:
     assert state.scores[Faction.EYRIE] == before + 1
 
 
+def test_eyrie_cannot_build_more_than_one_roost_in_a_clearing() -> None:
+    engine = RootEngine(seed=56)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+    state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.birdsong_cards_added = 1
+    state.board.warriors[12][Faction.EYRIE] = 1
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+
+    assert all(
+        not (isinstance(action, Build) and action.clearing_id == 12)
+        for action in engine.get_valid_actions()
+    )
+    with pytest.raises(ValueError, match="already has a roost"):
+        eyrie_rules.apply_build(state, Build(clearing_id=12, building_type=BuildingType.ROOST))
+
+
 def test_keep_blocks_non_marquise_piece_placement() -> None:
     engine = RootEngine(seed=53)
     state = engine.get_state()
@@ -637,6 +659,27 @@ def test_alliance_revolt_removes_enemy_pieces_places_base_and_officer() -> None:
     assert state.board.warriors[2][Faction.ALLIANCE] == 2
     assert state.alliance.officers == 1
     assert state.scores[Faction.ALLIANCE] == before_score + 3
+
+
+def test_alliance_cannot_revolt_to_place_second_base_in_a_clearing() -> None:
+    engine = RootEngine(seed=75)
+    _advance_to_alliance_birdsong(engine)
+    state = engine.get_state()
+    clearing_id = 2
+    suit = state.board.clearings[clearing_id].suit
+    state.board.tokens[clearing_id][Faction.ALLIANCE].append(TokenType.SYMPATHY)
+    state.board.buildings[clearing_id][Faction.ALLIANCE].append(BuildingType.BASE)
+    state.alliance.bases[suit] = False
+    state.alliance.supporters = [
+        cid for cid, card in state.cards.items() if card.suit in (suit, Suit.BIRD)
+    ][:2]
+
+    assert all(
+        not (isinstance(action, Revolt) and action.clearing_id == clearing_id)
+        for action in engine.get_valid_actions()
+    )
+    with pytest.raises(ValueError, match="already has a base"):
+        alliance_rules.apply_revolt(state, Revolt(clearing_id=clearing_id))
 
 
 def test_alliance_spread_sympathy_accounts_for_martial_law_cost() -> None:
