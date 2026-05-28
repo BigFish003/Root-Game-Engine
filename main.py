@@ -121,35 +121,60 @@ def build_alliance_action_index() -> ActionIndex:
     return ActionIndex(actions=actions, lookup=lookup)
 
 
-def masked_alliance_policy(engine: RootEngine, model: AllianceNN, action_index: ActionIndex) -> torch.Tensor:
-    """Return a masked categorical policy over a giant fixed Alliance action space."""
+def masked_alliance_policy(
+    output: torch.Tensor, valid_actions: list[Any], action_index: ActionIndex
+) -> torch.Tensor:
+    """Return a new policy tensor with invalid Alliance actions masked out.
 
-    encoded = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
-    policy = model(encoded)
-    logits = torch.log(policy.squeeze(0).clamp_min(1e-12))
+    ``AllianceNN`` already returns a probability distribution, so masking is most
+    direct as a pure tensor operation: clone the model output, zero every action
+    that is not currently legal, and renormalize the remaining legal actions.
+    The input tensor is never mutated.
+    """
 
-    valid_actions = engine.get_valid_actions()
-    valid_indices = [action_index.lookup[action] for action in valid_actions if action in action_index.lookup]
+    valid_indices = [
+        action_index.lookup[action]
+        for action in valid_actions
+        if action in action_index.lookup
+    ]
+    masked_output = torch.zeros_like(output)
 
-    masked_logits = torch.full_like(logits, float("-inf"))
-    if valid_indices:
-        masked_logits[valid_indices] = logits[valid_indices]
-        masked_policy = torch.softmax(masked_logits, dim=-1)
-        return masked_policy
+    if not valid_indices:
+        # Safety fallback for weird intermediate states or an incomplete action index.
+        return output.clone()
 
-    # Safety fallback for weird intermediate states.
-    return torch.softmax(logits, dim=-1)
+    action_dim = output.shape[-1]
+    indices = torch.tensor(valid_indices, device=output.device, dtype=torch.long)
+    flat_output = output.reshape(-1, action_dim)
+    flat_masked = masked_output.reshape(-1, action_dim)
+    flat_masked[:, indices] = flat_output[:, indices]
+
+    normalizer = flat_masked.sum(dim=-1, keepdim=True)
+    normalized = torch.where(
+        normalizer > 0, flat_masked / normalizer.clamp_min(1e-12), flat_output
+    )
+
+    return normalized.reshape_as(output)
 
 
-engine = RootEngine(seed=random.randint(1,100000), excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
+engine = RootEngine(
+    seed=random.randint(1, 100000),
+    excluded_factions={Faction.VAGABOND},
+    marquise_ai_enabled=True,
+    eyrie_ai_enabled=True,
+)
 
 action_index = build_alliance_action_index()
 input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
 input_dim = input.numel()
 
-alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
+alliance_policy_model = AllianceNN(
+    input_dim=input_dim, action_dim=len(action_index.actions)
+)
 
 
 for i in range(50):
     input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
     output = alliance_policy_model(input)
+    valid_actions = engine.get_valid_actions()
+    masked_output = masked_alliance_policy(output, valid_actions, action_index)
