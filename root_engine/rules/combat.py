@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..enums import Faction, TokenType
 from ..models import GameState
 from . import alliance
+from .pieces import return_building_to_supply, return_token_to_supply
 
 
 def legal_battle_clearings(state: GameState, attacker: Faction) -> list[int]:
@@ -95,13 +96,15 @@ def _remove_defender_cardboard(
     sympathy_removed = 0
     while hits > 0 and tokens:
         token = tokens.pop()
+        return_token_to_supply(state, defender, token)
         removed += 1
         hits -= 1
         if token == TokenType.SYMPATHY:
             sympathy_removed += 1
     buildings = state.board.buildings[clearing_id][defender]
     while hits > 0 and buildings:
-        buildings.pop()
+        building = buildings.pop()
+        return_building_to_supply(state, defender, building, clearing_id)
         removed += 1
         hits -= 1
     for _ in range(sympathy_removed):

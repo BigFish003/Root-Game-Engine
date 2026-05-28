@@ -1131,3 +1131,57 @@ def test_eyrie_ai_autoplays_until_turn_ends_when_enabled() -> None:
     engine.set_eyrie_ai_enabled(True)
 
     assert state.turn.current_faction != Faction.EYRIE
+
+
+def test_battle_returns_removed_cardboard_to_supply_tracks() -> None:
+    engine = RootEngine(seed=301)
+    state = engine.get_state()
+    clearing_id = 2
+    state.board.warriors[clearing_id][Faction.MARQUISE] = 0
+    state.board.warriors[clearing_id][Faction.EYRIE] = 1
+    state.board.buildings[clearing_id][Faction.MARQUISE] = [BuildingType.SAWMILL]
+    state.marquise.buildings_in_supply[BuildingType.SAWMILL] = 5
+    state.board.tokens[clearing_id][Faction.MARQUISE] = []
+
+    combat_rules.resolve_basic_battle(state, Faction.EYRIE, Faction.MARQUISE, clearing_id)
+
+    assert state.board.buildings[clearing_id][Faction.MARQUISE] == []
+    assert state.marquise.buildings_in_supply[BuildingType.SAWMILL] == 6
+
+
+def test_battle_returns_removed_sympathy_to_supply_track() -> None:
+    engine = RootEngine(seed=302)
+    state = engine.get_state()
+    clearing_id = 2
+    state.board.warriors[clearing_id][Faction.MARQUISE] = 1
+    state.board.warriors[clearing_id][Faction.ALLIANCE] = 0
+    state.board.tokens[clearing_id][Faction.ALLIANCE] = [TokenType.SYMPATHY]
+    state.alliance.sympathy_in_supply = 9
+
+    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, clearing_id)
+
+    assert state.board.tokens[clearing_id][Faction.ALLIANCE] == []
+    assert state.alliance.sympathy_in_supply == 10
+
+
+def test_revolt_returns_removed_enemy_buildings_to_supply_tracks() -> None:
+    engine = RootEngine(seed=303)
+    state = engine.get_state()
+    clearing_id = 2
+    suit = state.board.clearings[clearing_id].suit
+    state.board.tokens[clearing_id][Faction.ALLIANCE] = [TokenType.SYMPATHY]
+    state.alliance.sympathy_in_supply = 9
+    state.alliance.supporters = [
+        cid for cid, card in state.cards.items() if card.suit in (suit, Suit.BIRD)
+    ][:2]
+    state.board.buildings[clearing_id][Faction.MARQUISE] = [BuildingType.SAWMILL]
+    state.marquise.buildings_in_supply[BuildingType.SAWMILL] = 5
+    state.board.buildings[clearing_id][Faction.EYRIE] = [BuildingType.ROOST]
+    state.eyrie.roosts_in_supply = 5
+
+    alliance_rules.apply_revolt(state, Revolt(clearing_id=clearing_id))
+
+    assert state.board.buildings[clearing_id][Faction.MARQUISE] == []
+    assert state.board.buildings[clearing_id][Faction.EYRIE] == []
+    assert state.marquise.buildings_in_supply[BuildingType.SAWMILL] == 6
+    assert state.eyrie.roosts_in_supply == 6
