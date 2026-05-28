@@ -141,16 +141,15 @@ def masked_alliance_policy(engine: RootEngine, model: AllianceNN, action_index: 
     return torch.softmax(logits, dim=-1)
 
 
-engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
+engine = RootEngine(seed=random.randint(1,100000), excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
 
 action_index = build_alliance_action_index()
 input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
 input_dim = input.numel()
-print("shape:", input.shape)
-print("len:", len(input))
-print("numel:", input.numel())
 
 alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
 
-for i in range(5):
-    pass
+
+for i in range(50):
+    input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
+    output = alliance_policy_model(input)
