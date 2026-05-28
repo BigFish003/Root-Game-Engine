@@ -21,6 +21,7 @@ from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
 from .crafting import legal_craft_cards
 from .movement import legal_move_destinations, legal_move_sources
+from .pieces import return_building_to_supply, return_token_to_supply
 
 
 def valid_actions(state: GameState) -> list:
@@ -411,11 +412,15 @@ def _remove_enemy_pieces_and_score(state: GameState, clearing_id: int) -> None:
         if faction == Faction.ALLIANCE:
             continue
         state.board.warriors[clearing_id][faction] = 0
-        removed_buildings = len(state.board.buildings[clearing_id][faction])
-        removed_tokens = len(state.board.tokens[clearing_id][faction])
+        removed_buildings = list(state.board.buildings[clearing_id][faction])
+        removed_tokens = list(state.board.tokens[clearing_id][faction])
         state.board.buildings[clearing_id][faction].clear()
         state.board.tokens[clearing_id][faction].clear()
-        state.scores[Faction.ALLIANCE] += removed_buildings + removed_tokens
+        for building in removed_buildings:
+            return_building_to_supply(state, faction, building, clearing_id)
+        for token in removed_tokens:
+            return_token_to_supply(state, faction, token)
+        state.scores[Faction.ALLIANCE] += len(removed_buildings) + len(removed_tokens)
 
 
 def _count_sympathy_of_suit(state: GameState, suit: Suit) -> int:

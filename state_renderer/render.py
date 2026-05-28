@@ -278,12 +278,12 @@ class state_renderer:
 
             inner_rect = (board_rect[0] + 10, board_rect[3] - 58, board_rect[2] - 10, board_rect[3] - 10)
             draw.rectangle(inner_rect, fill=(182, 205, 227), outline="black", width=3)
-            slots_per_row, slot_size, slot_spacing = 6, 18, 4
-            slots_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing
+            roost_slots, slot_size, slot_spacing = 7, 18, 4
+            slots_width = roost_slots * slot_size + (roost_slots - 1) * slot_spacing
             slots_start_x = board_rect[2] - 18 - slots_width
             row_center_y = (inner_rect[1] + inner_rect[3]) // 2
             roosts_remaining = int(public_data.get("roosts_in_supply", 0))
-            draw_supply_row(row_center_y, slots_start_x, slots_per_row, slot_size, slot_spacing, roosts_remaining, Roost)
+            draw_supply_row(row_center_y, slots_start_x, roost_slots, slot_size, slot_spacing, roosts_remaining, Roost)
 
         def draw_alliance_board(board_rect: tuple[int, int, int, int]) -> None:
             draw_faction_header(board_rect, "Woodland Alliance", (35, 80, 31))
