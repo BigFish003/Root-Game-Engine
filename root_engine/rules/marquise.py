@@ -70,10 +70,19 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("Recruit can only be taken in Daylight")
     if state.marquise.recruit_used_this_turn:
         raise ValueError("Marquise recruit can only be used once per turn")
-    if state.marquise.warriors_in_supply <= 0:
-        raise ValueError("No Marquise warriors in supply")
-    state.board.warriors[action.clearing_id][Faction.MARQUISE] += 1
-    state.marquise.warriors_in_supply -= 1
+    recruiter_clearings = _recruiter_clearings(state)
+    if action.clearing_id not in recruiter_clearings:
+        raise ValueError("Can only recruit from a Marquise recruiter")
+
+    ordered_clearings = [action.clearing_id] + [
+        cid for cid in sorted(recruiter_clearings) if cid != action.clearing_id
+    ]
+    for cid in ordered_clearings:
+        if state.marquise.warriors_in_supply <= 0:
+            break
+        state.board.warriors[cid][Faction.MARQUISE] += 1
+        state.marquise.warriors_in_supply -= 1
+
     state.marquise.recruit_used_this_turn = True
     state.marquise.daylight_actions_used += 1
     state.marquise.crafting_window_open = False
@@ -199,6 +208,10 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
 def _legal_recruit_clearings(state: GameState) -> list[int]:
     if state.marquise.warriors_in_supply <= 0:
         return []
+    return _recruiter_clearings(state)
+
+
+def _recruiter_clearings(state: GameState) -> list[int]:
     return [
         cid
         for cid, buildings in state.board.buildings.items()

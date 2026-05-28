@@ -256,7 +256,7 @@ def test_marquise_recruit_is_once_per_turn() -> None:
     assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
 
 
-def test_marquise_recruit_requires_warriors_in_supply() -> None:
+def test_marquise_recruit_is_not_legal_when_supply_empty() -> None:
     engine = RootEngine(seed=17)
     state = engine.get_state()
     state.marquise.warriors_in_supply = 0
@@ -265,7 +265,38 @@ def test_marquise_recruit_requires_warriors_in_supply() -> None:
 
     assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
     with pytest.raises(ValueError, match="Illegal action"):
-        engine.apply_action(Recruit(clearing_id=1))
+        engine.apply_action(Recruit(clearing_id=4))
+
+
+def test_marquise_recruit_can_resolve_with_empty_supply() -> None:
+    engine = RootEngine(seed=18)
+    state = engine.get_state()
+    state.marquise.warriors_in_supply = 0
+    before = state.board.warriors[4][Faction.MARQUISE]
+
+    engine.apply_action(EndPhase())
+    marquise_rules.apply_recruit(state, Recruit(clearing_id=4))
+
+    assert state.board.warriors[4][Faction.MARQUISE] == before
+    assert state.marquise.warriors_in_supply == 0
+    assert state.marquise.recruit_used_this_turn
+
+
+def test_marquise_recruit_places_as_many_warriors_as_supply_allows() -> None:
+    engine = RootEngine(seed=19)
+    state = engine.get_state()
+    state.board.buildings[6][Faction.MARQUISE].append(BuildingType.RECRUITER)
+    state.board.buildings[8][Faction.MARQUISE].append(BuildingType.RECRUITER)
+    state.marquise.warriors_in_supply = 2
+    before = {cid: state.board.warriors[cid][Faction.MARQUISE] for cid in (4, 6, 8)}
+
+    engine.apply_action(EndPhase())
+    engine.apply_action(Recruit(clearing_id=8))
+
+    assert state.board.warriors[8][Faction.MARQUISE] == before[8] + 1
+    placed = sum(state.board.warriors[cid][Faction.MARQUISE] - before[cid] for cid in (4, 6, 8))
+    assert placed == 2
+    assert state.marquise.warriors_in_supply == 0
 
 
 def test_base_deck_contains_expected_card_count() -> None:
