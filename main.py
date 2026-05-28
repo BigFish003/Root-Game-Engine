@@ -11,7 +11,6 @@ from NN.allianceNN import AllianceNN
 from root_engine.actions import (
     Build,
     Craft,
-    EndDecision,
     EndPhase,
     Mobilize,
     Organize,
@@ -95,7 +94,7 @@ def build_alliance_action_index() -> ActionIndex:
     building_types = BuildingType.BASE
     card_ids = range(54)
 
-    actions: list[Any] = [EndPhase(), EndDecision()]
+    actions: list[Any] = [EndPhase()]
 
     for cid in clearings:
         actions.extend(

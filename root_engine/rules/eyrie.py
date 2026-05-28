@@ -6,7 +6,6 @@ from ..actions import (
     AddToDecree,
     Build,
     Craft,
-    EndDecision,
     EndPhase,
     FallIntoTurmoil,
     Recruit,
@@ -61,13 +60,13 @@ def valid_actions(state: GameState) -> list:
             for cid in legal_move_destinations(state, Faction.EYRIE, ctx.selected_source)
             for warriors_to_move in range(1, warriors_at_source + 1)
         ]
-        return actions + [EndDecision()]
+        return actions
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)
             for f in legal_battle_targets(state, Faction.EYRIE, ctx.selected_battle_clearing)
-        ] + [EndDecision()]
-    return [EndDecision()]
+        ]
+    return []
 
 
 def apply_recruit(state: GameState, action: Recruit) -> None:

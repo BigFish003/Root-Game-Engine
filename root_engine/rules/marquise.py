@@ -5,10 +5,8 @@ from __future__ import annotations
 from ..actions import (
     Build,
     Craft,
-    EndDecision,
     EndPhase,
     Recruit,
-    ResolveMove,
     SelectBattleClearing,
     SelectBattleTarget,
     SelectMoveDestination,
@@ -58,13 +56,13 @@ def valid_actions(state: GameState) -> list:
         return [
             SelectMoveDestination(cid)
             for cid in legal_move_destinations(state, Faction.MARQUISE, ctx.selected_source)
-        ] + [EndDecision()]
+        ]
     if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
         return [
             SelectBattleTarget(f.value)
             for f in legal_battle_targets(state, Faction.MARQUISE, ctx.selected_battle_clearing)
-        ] + [EndDecision()]
-    return [EndDecision()]
+        ]
+    return []
 
 
 def apply_recruit(state: GameState, action: Recruit) -> None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Optional
 
 from .action_generation import get_valid_actions
@@ -10,7 +9,6 @@ from .actions import (
     AddToDecree,
     Build,
     Craft,
-    EndDecision,
     EndPhase,
     FallIntoTurmoil,
     Mobilize,
@@ -25,7 +23,7 @@ from .actions import (
     SpreadSympathy,
     Train,
 )
-from .enums import DecisionType, Faction
+from .enums import Faction
 from .models import GameState
 from .observation import Observation, build_observation
 from .ai.eyrie_ai import SearchConfig as EyrieSearchConfig, choose_action as choose_eyrie_action
@@ -83,17 +81,6 @@ class RootEngine:
         if not any(a == action for a in self.get_valid_actions()):
             raise ValueError(f"Illegal action for current context: {action}")
         faction = self._state.turn.current_faction
-        if isinstance(action, EndDecision):
-            self._state.decision_context = replace(
-                self._state.decision_context,
-                decision_type=DecisionType.MAIN_ACTION,
-                selected_source=None,
-                selected_destination=None,
-                selected_battle_clearing=None,
-                pending_moves_remaining=0,
-            )
-            self._auto_play_ai_turns_if_enabled()
-            return
         if isinstance(action, EndPhase):
             base_rules.advance_phase(self._state)
             self._auto_play_ai_turns_if_enabled()
@@ -175,16 +162,7 @@ class RootEngine:
             if not any(a == chosen_action for a in valid_actions):
                 chosen_action = valid_actions[0]
 
-            if isinstance(chosen_action, EndDecision):
-                self._state.decision_context = replace(
-                    self._state.decision_context,
-                    decision_type=DecisionType.MAIN_ACTION,
-                    selected_source=None,
-                    selected_destination=None,
-                    selected_battle_clearing=None,
-                    pending_moves_remaining=0,
-                )
-            elif isinstance(chosen_action, EndPhase):
+            if isinstance(chosen_action, EndPhase):
                 base_rules.advance_phase(self._state)
             else:
                 if current == Faction.MARQUISE:

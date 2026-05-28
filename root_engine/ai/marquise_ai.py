@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..actions import Build, Craft, EndDecision, EndPhase, Recruit, SelectBattleClearing, SelectBattleTarget, SelectMoveDestination, SelectMoveSource
+from ..actions import Build, Craft, EndPhase, Recruit, SelectBattleClearing, SelectBattleTarget, SelectMoveDestination, SelectMoveSource
 from ..enums import BuildingType, Faction, Phase, TokenType
 
 
@@ -68,6 +68,5 @@ def _action_bias(action: Any) -> float:
     if isinstance(action, SelectBattleTarget): return 10
     if isinstance(action, SelectMoveSource): return 8
     if isinstance(action, SelectMoveDestination): return 7
-    if isinstance(action, EndDecision): return -3
     if isinstance(action, EndPhase): return -20
     return 0
