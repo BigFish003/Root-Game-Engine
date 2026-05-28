@@ -532,6 +532,49 @@ def test_eyrie_does_not_reinitialize_decree_after_finishing_all_cards() -> None:
     assert not any(isinstance(action, FallIntoTurmoil) for action in actions)
 
 
+def test_eyrie_recruit_decree_turmoils_when_warrior_supply_empty() -> None:
+    engine = RootEngine(seed=411)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    state.eyrie.decree = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.birdsong_cards_added = 1
+    state.eyrie.warriors_in_supply = 0
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    actions = engine.get_valid_actions()
+
+    assert not any(isinstance(action, Recruit) for action in actions)
+    assert any(isinstance(action, FallIntoTurmoil) for action in actions)
+
+
+def test_eyrie_charismatic_recruit_uses_remaining_warriors_without_negative_supply() -> None:
+    engine = RootEngine(seed=412)
+    while engine.get_state().turn.current_faction != Faction.EYRIE:
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+        engine.apply_action(EndPhase())
+    state = engine.get_state()
+
+    state.eyrie.leader = "charismatic"
+    state.eyrie.decree = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.birdsong_cards_added = 1
+    state.eyrie.warriors_in_supply = 1
+    before = state.board.warriors[12][Faction.EYRIE]
+
+    engine.apply_action(EndPhase())  # birdsong -> daylight
+    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    engine.apply_action(recruit)
+
+    assert state.board.warriors[12][Faction.EYRIE] == before + 1
+    assert state.eyrie.warriors_in_supply == 0
+
+
 def test_eyrie_lords_of_the_forest_rules_ties_but_not_empty_clearings() -> None:
     engine = RootEngine(seed=43)
     state = engine.get_state()
