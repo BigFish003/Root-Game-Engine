@@ -90,7 +90,7 @@ class ActionIndex:
 def build_alliance_action_index() -> ActionIndex:
     clearings = range(1, 13)
     factions = (Faction.MARQUISE, Faction.EYRIE, Faction.VAGABOND)
-    building_types = (BuildingType.FOX_BASE, BuildingType.RABBIT_BASE, BuildingType.MOUSE_BASE)
+    building_types = BuildingType.BASE
     card_ids = range(54)
 
     actions: list[Any] = [EndPhase(), EndDecision()]
@@ -106,8 +106,7 @@ def build_alliance_action_index() -> ActionIndex:
                 SelectBattleClearing(cid),
             ]
         )
-        for building in building_types:
-            actions.append(Build(cid, building))
+        actions.append(Build(cid, building_types))
         for warriors in range(1, 11):
             actions.append(SelectMoveDestination(cid, warriors=warriors))
         actions.append(ResolveMove(warriors=1))
@@ -143,16 +142,15 @@ def masked_alliance_policy(engine: RootEngine, model: AllianceNN, action_index: 
 
 
 engine = RootEngine(seed=7, excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
+
 action_index = build_alliance_action_index()
-input_dim = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE).numel()
+input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
+input_dim = input.numel()
+print("shape:", input.shape)
+print("len:", len(input))
+print("numel:", input.numel())
+
 alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
 
-if engine.get_state().turn.current_faction == Faction.ALLIANCE:
-    masked_policy = masked_alliance_policy(engine, alliance_policy_model, action_index)
-    sampled_index = torch.multinomial(masked_policy, num_samples=1).item()
-    action = action_index.actions[sampled_index]
-    if any(a == action for a in engine.get_valid_actions()):
-        engine.apply_action(action)
-
-for i in range(5000):
+for i in range(5):
     pass
