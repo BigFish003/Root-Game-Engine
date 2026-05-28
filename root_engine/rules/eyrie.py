@@ -78,6 +78,7 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
         raise ValueError("Only the Marquise can place pieces in the keep clearing")
     if state.eyrie.warriors_in_supply <= 0:
         raise ValueError("No Eyrie warriors in supply")
+    warriors_to_place = min(warriors_to_place, state.eyrie.warriors_in_supply)
     state.board.warriors[action.clearing_id][Faction.EYRIE] += warriors_to_place
     state.eyrie.warriors_in_supply -= warriors_to_place
     _consume_decree_card(state, "recruit", state.board.clearings[action.clearing_id].suit)
@@ -212,10 +213,13 @@ def apply_select_leader(state: GameState, action: SelectEyrieLeader) -> None:
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
+    if state.eyrie.warriors_in_supply <= 0:
+        return []
     return [
         cid
         for cid, buildings in state.board.buildings.items()
-        if any(b == BuildingType.ROOST for b in buildings[Faction.EYRIE])
+        if cid != state.marquise.keep_clearing
+        and any(b == BuildingType.ROOST for b in buildings[Faction.EYRIE])
     ]
 
 
