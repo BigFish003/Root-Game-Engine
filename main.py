@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
 import torch
-from sympy.physics.units import current
-
 from NN.allianceNN import AllianceNN
 from root_engine.actions import (
     Build,
@@ -128,10 +126,11 @@ def masked_alliance_policy(
 ) -> torch.Tensor:
     """Return a new policy tensor with invalid Alliance actions masked out.
 
-    ``AllianceNN`` already returns a probability distribution, so masking is most
-    direct as a pure tensor operation: clone the model output, zero every action
-    that is not currently legal, and renormalize the remaining legal actions.
-    The input tensor is never mutated.
+    ``AllianceNN`` returns raw policy logits, which may be negative. Invalid
+    actions must therefore be set to negative infinity before normalizing; simply
+    zeroing them can make an illegal action look better than every legal action.
+    The returned tensor is a probability distribution over only the represented
+    legal actions, and the input tensor is never mutated.
     """
 
     valid_indices = [
@@ -139,54 +138,67 @@ def masked_alliance_policy(
         for action in valid_actions
         if action in action_index.lookup
     ]
-    masked_output = torch.zeros_like(output)
 
     if not valid_indices:
-        # Safety fallback for weird intermediate states or an incomplete action index.
-        return output.clone()
+        raise ValueError(
+            "No currently valid Alliance actions are represented in the action index"
+        )
 
     action_dim = output.shape[-1]
     indices = torch.tensor(valid_indices, device=output.device, dtype=torch.long)
+
+    masked_logits = torch.full_like(output, float("-inf"))
     flat_output = output.reshape(-1, action_dim)
-    flat_masked = masked_output.reshape(-1, action_dim)
+    flat_masked = masked_logits.reshape(-1, action_dim)
     flat_masked[:, indices] = flat_output[:, indices]
 
-    normalizer = flat_masked.sum(dim=-1, keepdim=True)
-    normalized = torch.where(
-        normalizer > 0, flat_masked / normalizer.clamp_min(1e-12), flat_output
+    return torch.softmax(masked_logits, dim=-1)
+
+
+def run_demo_games(game_count: int = 5) -> None:
+    setup_engine = RootEngine(
+        seed=random.randint(1, 100000),
+        excluded_factions={Faction.VAGABOND},
+        marquise_ai_enabled=True,
+        eyrie_ai_enabled=True,
     )
 
-    return normalized.reshape_as(output)
+    action_index = build_alliance_action_index()
+    encoded_state = AllianceNN.encode_leaf_state(
+        setup_engine.get_state(), observer=Faction.ALLIANCE
+    )
+    input_dim = encoded_state.numel()
+
+    alliance_policy_model = AllianceNN(
+        input_dim=input_dim, action_dim=len(action_index.actions)
+    )
+
+    render = state_renderer()
+    for _ in range(game_count):
+        engine = RootEngine(
+            excluded_factions={Faction.VAGABOND},
+            marquise_ai_enabled=True,
+            eyrie_ai_enabled=True,
+        )
+        while not engine.is_terminal():
+            encoded_state = AllianceNN.encode_leaf_state(
+                engine.get_state(), observer=Faction.ALLIANCE
+            )
+            output = alliance_policy_model(encoded_state)
+
+            valid_actions = engine.get_valid_actions()
+            masked_output = masked_alliance_policy(output, valid_actions, action_index)
+            best_action_idx = masked_output.argmax().item()
+            best_action = action_index.actions[best_action_idx]
+
+            print(valid_actions)
+            print(best_action)
+            render.render_board(
+                engine.get_observation(Faction.ALLIANCE), output_path="game_state.png"
+            )
+            engine.apply_action(best_action)
+        print(engine.get_state().scores)
 
 
-engine = RootEngine(
-    seed=random.randint(1, 100000),
-    excluded_factions={Faction.VAGABOND},
-    marquise_ai_enabled=True,
-    eyrie_ai_enabled=True,
-)
-
-action_index = build_alliance_action_index()
-input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
-input_dim = input.numel()
-
-alliance_policy_model = AllianceNN(input_dim=input_dim, action_dim=len(action_index.actions))
-
-engine = RootEngine(excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True,eyrie_ai_enabled=True)
-render = state_renderer()
-for i in range(5):
-    engine = RootEngine(excluded_factions={Faction.VAGABOND}, marquise_ai_enabled=True, eyrie_ai_enabled=True)
-    while not engine.is_terminal():
-        input = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
-        output = alliance_policy_model(input)
-
-        valid_actions = engine.get_valid_actions()
-        masked_output = masked_alliance_policy(output, valid_actions, action_index)
-        best_action_idx = masked_output.argmax().item()
-        best_action = action_index.actions[best_action_idx]
-
-        print(valid_actions)
-        print(best_action)
-        render.render_board(engine.get_observation(Faction.ALLIANCE), "game_state.png")
-        engine.apply_action(best_action)
-    print(engine.get_state().scores)
+if __name__ == "__main__":
+    run_demo_games()
