@@ -91,6 +91,8 @@ def apply_build(state: GameState, action: Build) -> None:
         raise ValueError("Eyrie can only build roosts")
     if state.eyrie.roosts_in_supply <= 0:
         raise ValueError("No roosts left")
+    if BuildingType.ROOST in state.board.buildings[action.clearing_id][Faction.EYRIE]:
+        raise ValueError("Clearing already has a roost")
     if len(state.board.buildings[action.clearing_id][Faction.EYRIE]) >= state.board.clearings[action.clearing_id].building_slots:
         raise ValueError("No free slot")
     state.board.buildings[action.clearing_id][Faction.EYRIE].append(BuildingType.ROOST)
@@ -223,8 +225,11 @@ def _legal_roost_builds(state: GameState) -> list[int]:
     for cid in state.board.clearings:
         if state.board.warriors[cid][Faction.EYRIE] <= 0:
             continue
+        existing = state.board.buildings[cid][Faction.EYRIE]
+        if BuildingType.ROOST in existing:
+            continue
         slots = state.board.clearings[cid].building_slots
-        if len(state.board.buildings[cid][Faction.EYRIE]) < slots:
+        if len(existing) < slots:
             result.append(cid)
     return result
 
