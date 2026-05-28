@@ -185,6 +185,7 @@ for i in range(5):
         best_action_idx = masked_output.argmax().item()
         best_action = action_index.actions[best_action_idx]
 
+        print(valid_actions)
         print(best_action)
         render.render_board(engine.get_observation(Faction.ALLIANCE), "game_state.png")
         engine.apply_action(best_action)

@@ -89,7 +89,7 @@ class AllianceNN(nn.Module):
             x = x.unsqueeze(0)
 
         features = self.backbone(x)
-        return torch.softmax(self.policy_head(features), dim=-1)
+        return self.policy_head(features)
 
     @staticmethod
     def encode_leaf_state(
