@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
 import torch
+from sympy.logic.inference import valid
+
 from NN.allianceNN import AllianceNN
 from root_engine.actions import (
     Build,
@@ -29,7 +31,6 @@ from root_engine.enums import BuildingType, Faction
 from state_renderer.render import state_renderer
 
 c = 1.0
-
 
 class Node:
     def __init__(self, parent: Optional["Node"], state: Any, faction: Faction):
@@ -80,12 +81,10 @@ class Node:
             node.N += 1
             node = node.parent
 
-
 @dataclass(frozen=True)
 class ActionIndex:
     actions: list[Any]
     lookup: dict[Any, int]
-
 
 def build_alliance_action_index() -> ActionIndex:
     clearings = range(1, 13)
@@ -120,10 +119,7 @@ def build_alliance_action_index() -> ActionIndex:
     lookup = {action: i for i, action in enumerate(actions)}
     return ActionIndex(actions=actions, lookup=lookup)
 
-
-def masked_alliance_policy(
-    output: torch.Tensor, valid_actions: list[Any], action_index: ActionIndex
-) -> torch.Tensor:
+def masked_alliance_policy(output: torch.Tensor, valid_actions: list[Any], action_index: ActionIndex) -> torch.Tensor:
     """Return a new policy tensor with invalid Alliance actions masked out.
 
     ``AllianceNN`` returns raw policy logits, which may be negative. Invalid
@@ -154,10 +150,8 @@ def masked_alliance_policy(
 
     return torch.softmax(masked_logits, dim=-1)
 
-
 def run_demo_games(game_count: int = 5) -> None:
     setup_engine = RootEngine(
-        seed=random.randint(1, 100000),
         excluded_factions={Faction.VAGABOND},
         marquise_ai_enabled=True,
         eyrie_ai_enabled=True,
@@ -191,7 +185,7 @@ def run_demo_games(game_count: int = 5) -> None:
             best_action_idx = masked_output.argmax().item()
             best_action = action_index.actions[best_action_idx]
 
-            print(valid_actions)
+
             print(best_action)
             render.render_board(
                 engine.get_observation(Faction.ALLIANCE), output_path="game_state.png"
@@ -199,6 +193,5 @@ def run_demo_games(game_count: int = 5) -> None:
             engine.apply_action(best_action)
         print(engine.get_state().scores)
 
-
 if __name__ == "__main__":
-    run_demo_games()
+    pass
