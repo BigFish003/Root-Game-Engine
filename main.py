@@ -126,7 +126,7 @@ def masked_alliance_policy(engine: RootEngine, model: AllianceNN, action_index: 
     """Return a masked categorical policy over a giant fixed Alliance action space."""
 
     encoded = AllianceNN.encode_leaf_state(engine.get_state(), observer=Faction.ALLIANCE)
-    policy, _ = model(encoded)
+    policy = model(encoded)
     logits = torch.log(policy.squeeze(0).clamp_min(1e-12))
 
     valid_actions = engine.get_valid_actions()

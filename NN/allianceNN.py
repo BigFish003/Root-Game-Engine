@@ -11,7 +11,7 @@ from root_engine.observation import Observation, build_observation
 
 
 class AllianceNN(nn.Module):
-    """Policy-value network for the Woodland Alliance.
+    """Policy network for the Woodland Alliance.
 
     Input should be a flattened state/observation vector of shape:
     - [input_dim] for a single position, or
@@ -19,7 +19,6 @@ class AllianceNN(nn.Module):
 
     Output:
     - policy: probability distribution across actions, shape [..., action_dim]
-    - value: scalar in [-1, 1], shape [..., 1]
     """
 
     def __init__(self, input_dim: int, action_dim: int, hidden_dim: int = 256):
@@ -33,16 +32,13 @@ class AllianceNN(nn.Module):
         )
 
         self.policy_head = nn.Linear(hidden_dim, action_dim)
-        self.value_head = nn.Linear(hidden_dim, 1)
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 1:
             x = x.unsqueeze(0)
 
         features = self.backbone(x)
-        policy = torch.softmax(self.policy_head(features), dim=-1)
-        value = torch.tanh(self.value_head(features))
-        return policy, value
+        return torch.softmax(self.policy_head(features), dim=-1)
 
     @staticmethod
     def encode_leaf_state(
