@@ -256,6 +256,18 @@ def test_marquise_recruit_is_once_per_turn() -> None:
     assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
 
 
+def test_marquise_recruit_requires_warriors_in_supply() -> None:
+    engine = RootEngine(seed=17)
+    state = engine.get_state()
+    state.marquise.warriors_in_supply = 0
+
+    engine.apply_action(EndPhase())
+
+    assert not any(isinstance(a, Recruit) for a in engine.get_valid_actions())
+    with pytest.raises(ValueError, match="Illegal action"):
+        engine.apply_action(Recruit(clearing_id=1))
+
+
 def test_base_deck_contains_expected_card_count() -> None:
     engine = RootEngine(seed=21)
     assert len(engine.get_state().cards) == 53
