@@ -3,11 +3,10 @@ import pytest
 pytest.importorskip("torch")
 import torch
 
-from main import (
-    PPOConfig,
+from main import PPOConfig, parse_args
+from NN.alliance_action_index import (
     build_alliance_action_index,
     masked_alliance_policy,
-    parse_args,
 )
 from root_engine.actions import EndPhase, SelectMoveDestination, SpreadSympathy
 
