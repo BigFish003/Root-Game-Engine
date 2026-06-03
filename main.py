@@ -3,6 +3,7 @@ import math
 import random
 import copy
 import argparse
+import sys
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
@@ -483,7 +484,12 @@ def run_demo_games(game_count: int = 5) -> None:
         print(engine.get_state().scores)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    if argv is None:
+        argv = sys.argv[1:]
+    else:
+        argv = list(argv)
+
     parser = argparse.ArgumentParser(description="Train or demo the Alliance policy.")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -501,8 +507,13 @@ def parse_args() -> argparse.Namespace:
     demo_parser = subparsers.add_parser("demo", help="Run untrained policy demo games")
     demo_parser.add_argument("--games", type=int, default=5)
 
+    if not argv:
+        argv = ["train"]
+    elif argv[0].startswith("-") and argv[0] not in {"-h", "--help"}:
+        argv = ["train", *argv]
+
     parser.set_defaults(command="train")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":

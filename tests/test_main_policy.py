@@ -3,7 +3,12 @@ import pytest
 pytest.importorskip("torch")
 import torch
 
-from main import build_alliance_action_index, masked_alliance_policy
+from main import (
+    PPOConfig,
+    build_alliance_action_index,
+    masked_alliance_policy,
+    parse_args,
+)
 from root_engine.actions import EndPhase, SelectMoveDestination, SpreadSympathy
 
 
@@ -35,3 +40,26 @@ def test_masked_alliance_policy_rejects_unrepresented_valid_actions():
             [SelectMoveDestination(clearing_id=3, warriors=99)],
             action_index,
         )
+
+
+def test_parse_args_defaults_to_train_options_when_no_subcommand():
+    args = parse_args([])
+
+    assert args.command == "train"
+    assert args.updates == PPOConfig.total_updates
+    assert args.rollout_steps == PPOConfig.rollout_steps
+    assert args.device is None
+
+
+def test_parse_args_accepts_train_options_without_explicit_subcommand():
+    args = parse_args(["--updates", "3"])
+
+    assert args.command == "train"
+    assert args.updates == 3
+
+
+def test_parse_args_keeps_demo_options_on_demo_subcommand():
+    args = parse_args(["demo", "--games", "2"])
+
+    assert args.command == "demo"
+    assert args.games == 2
