@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..cards import item_type_from_card_name
 from ..actions import (
     Build,
     Craft,
@@ -29,38 +30,62 @@ def valid_actions(state: GameState) -> list:
 
     ctx = state.decision_context
     if ctx.pending_moves_remaining > 0:
-        if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
+        if (
+            ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION
+            and ctx.selected_source is not None
+        ):
             return [
                 SelectMoveDestination(cid)
-                for cid in legal_move_destinations(state, Faction.MARQUISE, ctx.selected_source)
+                for cid in legal_move_destinations(
+                    state, Faction.MARQUISE, ctx.selected_source
+                )
             ]
-        return [SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE)]
+        return [
+            SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE)
+        ]
     if ctx.decision_type == DecisionType.MAIN_ACTION:
         actions: list = [EndPhase()]
         if state.marquise.crafting_window_open:
             actions.extend(
-                Craft(card_id) for card_id in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE)
+                Craft(card_id)
+                for card_id in legal_craft_cards(
+                    state, state.marquise.hand, Faction.MARQUISE
+                )
             )
         if state.marquise.daylight_actions_used >= 3:
             return actions
         if not state.marquise.recruit_used_this_turn:
             actions.extend(Recruit(cid) for cid in _legal_recruit_clearings(state))
         actions.extend(
-            Build(clearing_id=cid, building_type=b)
-            for cid, b in _legal_builds(state)
+            Build(clearing_id=cid, building_type=b) for cid, b in _legal_builds(state)
         )
-        actions.extend(SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE))
-        actions.extend(SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.MARQUISE))
+        actions.extend(
+            SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.MARQUISE)
+        )
+        actions.extend(
+            SelectBattleClearing(cid)
+            for cid in legal_battle_clearings(state, Faction.MARQUISE)
+        )
         return actions
-    if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
+    if (
+        ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION
+        and ctx.selected_source is not None
+    ):
         return [
             SelectMoveDestination(cid)
-            for cid in legal_move_destinations(state, Faction.MARQUISE, ctx.selected_source)
+            for cid in legal_move_destinations(
+                state, Faction.MARQUISE, ctx.selected_source
+            )
         ]
-    if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
+    if (
+        ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET
+        and ctx.selected_battle_clearing is not None
+    ):
         return [
             SelectBattleTarget(f.value)
-            for f in legal_battle_targets(state, Faction.MARQUISE, ctx.selected_battle_clearing)
+            for f in legal_battle_targets(
+                state, Faction.MARQUISE, ctx.selected_battle_clearing
+            )
         ]
     return []
 
@@ -95,7 +120,11 @@ def apply_build(state: GameState, action: Build) -> None:
         raise ValueError("Marquise must rule the clearing to build")
     if state.marquise.buildings_in_supply[action.building_type] <= 0:
         raise ValueError("No building of requested type left")
-    if action.building_type not in [BuildingType.SAWMILL, BuildingType.WORKSHOP, BuildingType.RECRUITER]:
+    if action.building_type not in [
+        BuildingType.SAWMILL,
+        BuildingType.WORKSHOP,
+        BuildingType.RECRUITER,
+    ]:
         raise ValueError("Marquise cannot build this building type")
     buildings = state.board.buildings[action.clearing_id][Faction.MARQUISE]
     slots = state.board.clearings[action.clearing_id].building_slots
@@ -145,7 +174,9 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
         state.marquise.crafting_window_open = False
 
 
-def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
+def apply_battle_select_clearing(
+    state: GameState, action: SelectBattleClearing
+) -> None:
     state.decision_context.decision_type = DecisionType.SELECT_BATTLE_TARGET
     state.decision_context.selected_battle_clearing = action.clearing_id
 
@@ -169,7 +200,9 @@ def apply_craft(state: GameState, action: Craft) -> None:
         raise ValueError("Crafting is only available at the start of Daylight")
     if action.card_id not in state.marquise.hand:
         raise ValueError("Card not in hand")
-    if action.card_id not in legal_craft_cards(state, state.marquise.hand, Faction.MARQUISE):
+    if action.card_id not in legal_craft_cards(
+        state, state.marquise.hand, Faction.MARQUISE
+    ):
         raise ValueError("Card cannot be crafted with available workshops")
     spend_marquise_crafting_power(state, action.card_id)
     card = state.cards[action.card_id]
@@ -178,6 +211,10 @@ def apply_craft(state: GameState, action: Craft) -> None:
         state.scores[Faction.MARQUISE] += card.vp_on_craft
     if card.name.startswith("Favor of the"):
         _resolve_favor(state, card.suit)
+    if CardTag.ITEM in card.tags:
+        item = item_type_from_card_name(card.name)
+        crafted = state.crafted_items.setdefault(Faction.MARQUISE, {})
+        crafted[item] = crafted.get(item, 0) + 1
     if CardTag.PERSISTENT_EFFECT in card.tags:
         state.marquise.crafted_effects.append(card.name)
     else:
@@ -190,19 +227,27 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
             continue
         state.board.warriors[cid][Faction.EYRIE] = 0
         state.board.warriors[cid][Faction.ALLIANCE] = 0
-        removed = len(state.board.buildings[cid][Faction.EYRIE]) + len(state.board.buildings[cid][Faction.ALLIANCE])
+        removed = len(state.board.buildings[cid][Faction.EYRIE]) + len(
+            state.board.buildings[cid][Faction.ALLIANCE]
+        )
         state.board.buildings[cid][Faction.EYRIE].clear()
         state.board.buildings[cid][Faction.ALLIANCE].clear()
         sympathy_removed = sum(
-            1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY
+            1
+            for token in state.board.tokens[cid][Faction.ALLIANCE]
+            if token == TokenType.SYMPATHY
         )
         removed += sympathy_removed
         state.board.tokens[cid][Faction.ALLIANCE] = [
-            token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+            token
+            for token in state.board.tokens[cid][Faction.ALLIANCE]
+            if token != TokenType.SYMPATHY
         ]
         state.scores[Faction.MARQUISE] += removed
         for _ in range(sympathy_removed):
-            alliance_rules.trigger_outrage(state, Faction.MARQUISE, cid, require_sympathy_present=False)
+            alliance_rules.trigger_outrage(
+                state, Faction.MARQUISE, cid, require_sympathy_present=False
+            )
 
 
 def _legal_recruit_clearings(state: GameState) -> list[int]:
@@ -230,10 +275,13 @@ def _legal_builds(state: GameState) -> list[tuple[int, BuildingType]]:
             continue
         if not _marquise_rules_clearing(state, cid):
             continue
-        for btype in [BuildingType.SAWMILL, BuildingType.WORKSHOP, BuildingType.RECRUITER]:
-            if (
-                state.marquise.buildings_in_supply[btype] > 0
-                and _has_build_payment(state, cid, _marquise_build_cost(state, btype))
+        for btype in [
+            BuildingType.SAWMILL,
+            BuildingType.WORKSHOP,
+            BuildingType.RECRUITER,
+        ]:
+            if state.marquise.buildings_in_supply[btype] > 0 and _has_build_payment(
+                state, cid, _marquise_build_cost(state, btype)
             ):
                 result.append((cid, btype))
     return result
@@ -281,7 +329,11 @@ def _reachable_ruled_clearings(state: GameState, origin: int) -> set[int]:
 
 
 def _wood_count_in_clearing(state: GameState, clearing_id: int) -> int:
-    return sum(1 for token in state.board.tokens[clearing_id][Faction.MARQUISE] if token == TokenType.WOOD)
+    return sum(
+        1
+        for token in state.board.tokens[clearing_id][Faction.MARQUISE]
+        if token == TokenType.WOOD
+    )
 
 
 def _has_build_payment(state: GameState, target_clearing: int, cost: int) -> bool:
@@ -299,7 +351,9 @@ def _pay_wood_cost(state: GameState, target_clearing: int, cost: int) -> bool:
     remaining = cost
     for cid in reachable:
         tokens = state.board.tokens[cid][Faction.MARQUISE]
-        wood_indexes = [idx for idx, token in enumerate(tokens) if token == TokenType.WOOD]
+        wood_indexes = [
+            idx for idx, token in enumerate(tokens) if token == TokenType.WOOD
+        ]
         remove_now = min(len(wood_indexes), remaining)
         for token_idx in reversed(wood_indexes[:remove_now]):
             tokens.pop(token_idx)

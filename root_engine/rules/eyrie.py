@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..cards import item_type_from_card_name
 from ..actions import (
     AddToDecree,
     Build,
@@ -43,7 +44,10 @@ def valid_actions(state: GameState) -> list:
         _ensure_decree_progress_initialized(state)
         actions: list = []
         if state.eyrie.crafting_window_open:
-            actions.extend(Craft(card_id) for card_id in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE))
+            actions.extend(
+                Craft(card_id)
+                for card_id in legal_craft_cards(state, state.eyrie.hand, Faction.EYRIE)
+            )
 
         decree_actions = _current_decree_actions(state)
         if decree_actions:
@@ -53,18 +57,28 @@ def valid_actions(state: GameState) -> list:
         else:
             actions.append(EndPhase())
         return actions
-    if ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION and ctx.selected_source is not None:
+    if (
+        ctx.decision_type == DecisionType.SELECT_MOVE_DESTINATION
+        and ctx.selected_source is not None
+    ):
         warriors_at_source = state.board.warriors[ctx.selected_source][Faction.EYRIE]
         actions = [
             SelectMoveDestination(clearing_id=cid, warriors=warriors_to_move)
-            for cid in legal_move_destinations(state, Faction.EYRIE, ctx.selected_source)
+            for cid in legal_move_destinations(
+                state, Faction.EYRIE, ctx.selected_source
+            )
             for warriors_to_move in range(1, warriors_at_source + 1)
         ]
         return actions
-    if ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET and ctx.selected_battle_clearing is not None:
+    if (
+        ctx.decision_type == DecisionType.SELECT_BATTLE_TARGET
+        and ctx.selected_battle_clearing is not None
+    ):
         return [
             SelectBattleTarget(f.value)
-            for f in legal_battle_targets(state, Faction.EYRIE, ctx.selected_battle_clearing)
+            for f in legal_battle_targets(
+                state, Faction.EYRIE, ctx.selected_battle_clearing
+            )
         ]
     return []
 
@@ -81,7 +95,9 @@ def apply_recruit(state: GameState, action: Recruit) -> None:
     warriors_to_place = min(warriors_to_place, state.eyrie.warriors_in_supply)
     state.board.warriors[action.clearing_id][Faction.EYRIE] += warriors_to_place
     state.eyrie.warriors_in_supply -= warriors_to_place
-    _consume_decree_card(state, "recruit", state.board.clearings[action.clearing_id].suit)
+    _consume_decree_card(
+        state, "recruit", state.board.clearings[action.clearing_id].suit
+    )
 
 
 def apply_build(state: GameState, action: Build) -> None:
@@ -93,7 +109,10 @@ def apply_build(state: GameState, action: Build) -> None:
         raise ValueError("No roosts left")
     if BuildingType.ROOST in state.board.buildings[action.clearing_id][Faction.EYRIE]:
         raise ValueError("Clearing already has a roost")
-    if len(state.board.buildings[action.clearing_id][Faction.EYRIE]) >= state.board.clearings[action.clearing_id].building_slots:
+    if (
+        len(state.board.buildings[action.clearing_id][Faction.EYRIE])
+        >= state.board.clearings[action.clearing_id].building_slots
+    ):
         raise ValueError("No free slot")
     state.board.buildings[action.clearing_id][Faction.EYRIE].append(BuildingType.ROOST)
     state.eyrie.roosts_in_supply -= 1
@@ -124,7 +143,9 @@ def apply_move_destination(state: GameState, action: SelectMoveDestination) -> N
     state.decision_context.selected_source = None
 
 
-def apply_battle_select_clearing(state: GameState, action: SelectBattleClearing) -> None:
+def apply_battle_select_clearing(
+    state: GameState, action: SelectBattleClearing
+) -> None:
     state.decision_context.decision_type = DecisionType.SELECT_BATTLE_TARGET
     state.decision_context.selected_battle_clearing = action.clearing_id
 
@@ -162,6 +183,10 @@ def apply_craft(state: GameState, action: Craft) -> None:
         state.scores[Faction.EYRIE] += card.vp_on_craft
     if card.name.startswith("Favor of the"):
         _resolve_favor(state, card.suit)
+    if CardTag.ITEM in card.tags:
+        item = item_type_from_card_name(card.name)
+        crafted = state.crafted_items.setdefault(Faction.EYRIE, {})
+        crafted[item] = crafted.get(item, 0) + 1
     if CardTag.PERSISTENT_EFFECT in card.tags:
         state.eyrie.crafted_effects.append(card.name)
     else:
@@ -190,7 +215,9 @@ def apply_fall_into_turmoil(state: GameState, action: FallIntoTurmoil) -> None:
         for card_id in cards
         if _card_suit(state, card_id) == Suit.BIRD
     )
-    state.scores[Faction.EYRIE] = max(0, state.scores[Faction.EYRIE] - bird_cards_in_decree)
+    state.scores[Faction.EYRIE] = max(
+        0, state.scores[Faction.EYRIE] - bird_cards_in_decree
+    )
     for cards in state.eyrie.decree.values():
         state.discard_pile.extend(card_id for card_id in cards if card_id > 0)
         cards.clear()
@@ -248,11 +275,23 @@ def _current_decree_actions(state: GameState) -> list:
     suits = [_card_suit(state, card_id) for card_id in remaining]
 
     if column == "recruit":
-        return [Recruit(cid) for cid in _legal_recruit_clearings(state) if _suit_matches_any(state, cid, suits)]
+        return [
+            Recruit(cid)
+            for cid in _legal_recruit_clearings(state)
+            if _suit_matches_any(state, cid, suits)
+        ]
     if column == "move":
-        return [SelectMoveSource(cid) for cid in legal_move_sources(state, Faction.EYRIE) if _suit_matches_any(state, cid, suits)]
+        return [
+            SelectMoveSource(cid)
+            for cid in legal_move_sources(state, Faction.EYRIE)
+            if _suit_matches_any(state, cid, suits)
+        ]
     if column == "battle":
-        return [SelectBattleClearing(cid) for cid in legal_battle_clearings(state, Faction.EYRIE) if _suit_matches_any(state, cid, suits)]
+        return [
+            SelectBattleClearing(cid)
+            for cid in legal_battle_clearings(state, Faction.EYRIE)
+            if _suit_matches_any(state, cid, suits)
+        ]
     return [
         Build(clearing_id=cid, building_type=BuildingType.ROOST)
         for cid in _legal_roost_builds(state)
@@ -320,15 +359,18 @@ def _current_column(state: GameState) -> str | None:
 
 
 def _has_remaining_decree_cards(state: GameState) -> bool:
-    return any(state.eyrie.decree_cards_remaining[c] for c in ["recruit", "move", "battle", "build"])
+    return any(
+        state.eyrie.decree_cards_remaining[c]
+        for c in ["recruit", "move", "battle", "build"]
+    )
 
 
 def _ensure_decree_progress_initialized(state: GameState) -> None:
     if state.eyrie.resolving_decree:
         return
-    if state.eyrie.decree_cards_remaining == {key: [] for key in state.eyrie.decree} and any(
-        state.eyrie.decree.values()
-    ):
+    if state.eyrie.decree_cards_remaining == {
+        key: [] for key in state.eyrie.decree
+    } and any(state.eyrie.decree.values()):
         state.eyrie.decree_cards_remaining = {
             key: list(cards) for key, cards in state.eyrie.decree.items()
         }
@@ -341,23 +383,37 @@ def _resolve_favor(state: GameState, favor_suit: Suit) -> None:
             continue
         state.board.warriors[cid][Faction.MARQUISE] = 0
         state.board.warriors[cid][Faction.ALLIANCE] = 0
-        removed = len(state.board.buildings[cid][Faction.MARQUISE]) + len(state.board.buildings[cid][Faction.ALLIANCE])
+        removed = len(state.board.buildings[cid][Faction.MARQUISE]) + len(
+            state.board.buildings[cid][Faction.ALLIANCE]
+        )
         state.board.buildings[cid][Faction.MARQUISE].clear()
         state.board.buildings[cid][Faction.ALLIANCE].clear()
-        removed += sum(1 for token in state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.KEEP)
+        removed += sum(
+            1
+            for token in state.board.tokens[cid][Faction.MARQUISE]
+            if token == TokenType.KEEP
+        )
         state.board.tokens[cid][Faction.MARQUISE] = [
-            token for token in state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.KEEP
+            token
+            for token in state.board.tokens[cid][Faction.MARQUISE]
+            if token != TokenType.KEEP
         ]
         sympathy_removed = sum(
-            1 for token in state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY
+            1
+            for token in state.board.tokens[cid][Faction.ALLIANCE]
+            if token == TokenType.SYMPATHY
         )
         removed += sympathy_removed
         state.board.tokens[cid][Faction.ALLIANCE] = [
-            token for token in state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+            token
+            for token in state.board.tokens[cid][Faction.ALLIANCE]
+            if token != TokenType.SYMPATHY
         ]
         state.scores[Faction.EYRIE] += removed
         for _ in range(sympathy_removed):
-            alliance_rules.trigger_outrage(state, Faction.EYRIE, cid, require_sympathy_present=False)
+            alliance_rules.trigger_outrage(
+                state, Faction.EYRIE, cid, require_sympathy_present=False
+            )
 
 
 def _assign_leader_viziers(state: GameState, leader: str) -> None:
@@ -378,4 +434,6 @@ def _available_leaders(state: GameState) -> list[str]:
     all_leaders = ["despot", "commander", "charismatic", "builder"]
     if len(state.eyrie.turmoiled_leaders) >= len(all_leaders):
         state.eyrie.turmoiled_leaders.clear()
-    return [leader for leader in all_leaders if leader not in state.eyrie.turmoiled_leaders]
+    return [
+        leader for leader in all_leaders if leader not in state.eyrie.turmoiled_leaders
+    ]

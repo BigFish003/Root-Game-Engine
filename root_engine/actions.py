@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .enums import BuildingType
+from .enums import BuildingType, Faction, ItemType
 
 
 @dataclass(frozen=True)
@@ -113,3 +113,46 @@ class Train(Action):
 @dataclass(frozen=True)
 class Organize(Action):
     clearing_id: int
+
+
+@dataclass(frozen=True)
+class VagabondMove(Action):
+    destination: int
+
+
+@dataclass(frozen=True)
+class VagabondExplore(Action):
+    clearing_id: int
+
+
+@dataclass(frozen=True)
+class VagabondAid(Action):
+    target_faction: Faction
+    card_id: int
+    exhausted_item: ItemType
+
+
+@dataclass(frozen=True)
+class VagabondQuest(Action):
+    quest_id: str
+    draw_cards: bool = False
+
+
+@dataclass(frozen=True)
+class VagabondStrike(Action):
+    target_faction: Faction
+
+
+@dataclass(frozen=True)
+class VagabondRepair(Action):
+    damaged_item: ItemType
+
+
+@dataclass(frozen=True)
+class VagabondSpecial(Action):
+    target_faction: Faction | None = None
+
+
+@dataclass(frozen=True)
+class VagabondSlip(Action):
+    destination: int
