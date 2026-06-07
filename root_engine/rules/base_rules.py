@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..enums import BuildingType, DecisionType, Faction, Phase, TokenType
 from ..models import GameState
+from . import vagabond
 from .crafting import initialize_marquise_crafting_power
 from .eyrie import roost_draw_bonus, roost_points_for_evening
 from .marquise import recruiter_draw_bonus
@@ -21,7 +22,9 @@ def advance_phase(state: GameState) -> None:
     else:
         _resolve_evening_effects(state)
         _advance_to_next_faction(state)
-    state.decision_context = state.decision_context.__class__(decision_type=DecisionType.MAIN_ACTION)
+    state.decision_context = state.decision_context.__class__(
+        decision_type=DecisionType.MAIN_ACTION
+    )
 
 
 def _advance_to_next_faction(state: GameState) -> None:
@@ -37,6 +40,9 @@ def _advance_to_next_faction(state: GameState) -> None:
 
 
 def _resolve_birdsong_effects(state: GameState) -> None:
+    if state.turn.current_faction == Faction.VAGABOND:
+        vagabond.refresh_items(state)
+        return
     if state.turn.current_faction != Faction.MARQUISE:
         return
     for cid in state.board.clearings:
@@ -64,6 +70,8 @@ def _on_daylight_start(state: GameState) -> None:
     elif state.turn.current_faction == Faction.ALLIANCE:
         state.alliance.crafting_window_open = True
         state.alliance.military_ops_used = 0
+    elif state.turn.current_faction == Faction.VAGABOND:
+        state.vagabond.aid_given_this_turn.clear()
 
 
 def _resolve_evening_effects(state: GameState) -> None:
@@ -76,9 +84,13 @@ def _resolve_evening_effects(state: GameState) -> None:
         draw_count += roost_draw_bonus(state)
     elif state.turn.current_faction == Faction.ALLIANCE:
         draw_count += sum(1 for built in state.alliance.bases.values() if built)
+    elif state.turn.current_faction == Faction.VAGABOND:
+        draw_count = vagabond.evening_rest_and_draw(state)
     _draw_cards(state, faction_state.hand, draw_count)
     while len(faction_state.hand) > 5:
         state.discard_pile.append(faction_state.hand.pop())
+    if state.turn.current_faction == Faction.VAGABOND:
+        vagabond.enforce_item_capacity(state)
 
 
 def _draw_cards(state: GameState, hand: list[int], count: int) -> None:

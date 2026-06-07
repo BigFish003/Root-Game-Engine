@@ -20,9 +20,22 @@ from root_engine.actions import (
     SelectMoveSource,
     SpreadSympathy,
     Train,
+    VagabondAid,
+    VagabondExplore,
+    VagabondMove,
+    VagabondSlip,
 )
 from root_engine.engine import RootEngine
-from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
+from root_engine.enums import (
+    BuildingType,
+    DecisionType,
+    Faction,
+    ItemType,
+    Phase,
+    Suit,
+    TokenType,
+    VagabondRelation,
+)
 from root_engine.rules import alliance as alliance_rules
 from root_engine.rules import combat as combat_rules
 from root_engine.rules import eyrie as eyrie_rules
@@ -82,12 +95,19 @@ def test_recruit_and_build_mutate_state() -> None:
 
 
 def test_marquise_build_scoring_track_and_recruiter_draw_bonus() -> None:
-    engine = RootEngine(seed=203, excluded_factions={Faction.EYRIE, Faction.ALLIANCE, Faction.VAGABOND})
+    engine = RootEngine(
+        seed=203, excluded_factions={Faction.EYRIE, Faction.ALLIANCE, Faction.VAGABOND}
+    )
     state = engine.get_state()
     state.board.buildings[2][Faction.MARQUISE] = [BuildingType.RECRUITER]
     state.marquise.buildings_in_supply[BuildingType.RECRUITER] = 5
     state.board.warriors[2][Faction.MARQUISE] = 5
-    state.board.tokens[2][Faction.MARQUISE] = [TokenType.WOOD, TokenType.WOOD, TokenType.WOOD, TokenType.WOOD]
+    state.board.tokens[2][Faction.MARQUISE] = [
+        TokenType.WOOD,
+        TokenType.WOOD,
+        TokenType.WOOD,
+        TokenType.WOOD,
+    ]
     state.scores[Faction.MARQUISE] = 0
 
     engine.apply_action(EndPhase())  # birdsong -> daylight
@@ -95,7 +115,9 @@ def test_marquise_build_scoring_track_and_recruiter_draw_bonus() -> None:
     first_build = next(
         action
         for action in engine.get_valid_actions()
-        if isinstance(action, Build) and action.clearing_id == 2 and action.building_type == BuildingType.RECRUITER
+        if isinstance(action, Build)
+        and action.clearing_id == 2
+        and action.building_type == BuildingType.RECRUITER
     )
     engine.apply_action(first_build)
     assert state.scores[Faction.MARQUISE] == 1
@@ -119,33 +141,48 @@ def test_atomic_move_selection_changes_context_and_board() -> None:
     engine = RootEngine(seed=4)
     engine.apply_action(EndPhase())
 
-    select_source = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource))
+    select_source = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource)
+    )
     src1 = select_source.clearing_id
     src1_before = engine.get_state().board.warriors[src1][Faction.MARQUISE]
     actions_before = engine.get_state().marquise.daylight_actions_used
     engine.apply_action(select_source)
 
-    assert engine.get_state().decision_context.decision_type == DecisionType.SELECT_MOVE_DESTINATION
-    first_dest_action = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination))
+    assert (
+        engine.get_state().decision_context.decision_type
+        == DecisionType.SELECT_MOVE_DESTINATION
+    )
+    first_dest_action = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination)
+    )
     dest1 = first_dest_action.clearing_id
     dest1_before = engine.get_state().board.warriors[dest1][Faction.MARQUISE]
 
     engine.apply_action(first_dest_action)
     assert engine.get_state().board.warriors[src1][Faction.MARQUISE] == src1_before - 1
-    assert engine.get_state().board.warriors[dest1][Faction.MARQUISE] == dest1_before + 1
+    assert (
+        engine.get_state().board.warriors[dest1][Faction.MARQUISE] == dest1_before + 1
+    )
     assert engine.get_state().marquise.daylight_actions_used == actions_before
 
-    second_source = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource))
+    second_source = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SelectMoveSource)
+    )
     src2 = second_source.clearing_id
     src2_before = engine.get_state().board.warriors[src2][Faction.MARQUISE]
     engine.apply_action(second_source)
-    second_dest_action = next(a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination))
+    second_dest_action = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SelectMoveDestination)
+    )
     dest2 = second_dest_action.clearing_id
     dest2_before = engine.get_state().board.warriors[dest2][Faction.MARQUISE]
     engine.apply_action(second_dest_action)
 
     assert engine.get_state().board.warriors[src2][Faction.MARQUISE] == src2_before - 1
-    assert engine.get_state().board.warriors[dest2][Faction.MARQUISE] == dest2_before + 1
+    assert (
+        engine.get_state().board.warriors[dest2][Faction.MARQUISE] == dest2_before + 1
+    )
     assert engine.get_state().marquise.daylight_actions_used == actions_before + 1
     assert engine.get_state().decision_context.decision_type == DecisionType.MAIN_ACTION
 
@@ -154,7 +191,11 @@ def test_atomic_decisions_do_not_offer_end_decision_escape() -> None:
     engine = RootEngine(seed=404)
     engine.apply_action(EndPhase())
 
-    move_source = next(action for action in engine.get_valid_actions() if isinstance(action, SelectMoveSource))
+    move_source = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectMoveSource)
+    )
     engine.apply_action(move_source)
 
     move_actions = engine.get_valid_actions()
@@ -167,11 +208,17 @@ def test_atomic_decisions_do_not_offer_end_decision_escape() -> None:
     state.decision_context.decision_type = DecisionType.MAIN_ACTION
     state.decision_context.selected_source = None
     state.decision_context.pending_moves_remaining = 0
-    state.board.warriors[2][Faction.MARQUISE] = max(state.board.warriors[2][Faction.MARQUISE], 1)
-    state.board.warriors[2][Faction.EYRIE] = max(state.board.warriors[2][Faction.EYRIE], 1)
+    state.board.warriors[2][Faction.MARQUISE] = max(
+        state.board.warriors[2][Faction.MARQUISE], 1
+    )
+    state.board.warriors[2][Faction.EYRIE] = max(
+        state.board.warriors[2][Faction.EYRIE], 1
+    )
 
     battle_clearing = next(
-        action for action in engine.get_valid_actions() if isinstance(action, SelectBattleClearing)
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectBattleClearing)
     )
     engine.apply_action(battle_clearing)
 
@@ -229,7 +276,10 @@ def test_clone_is_independent() -> None:
     recruit = next(a for a in clone.get_valid_actions() if isinstance(a, Recruit))
     clone.apply_action(recruit)
 
-    assert clone.get_state().marquise.warriors_in_supply != engine.get_state().marquise.warriors_in_supply
+    assert (
+        clone.get_state().marquise.warriors_in_supply
+        != engine.get_state().marquise.warriors_in_supply
+    )
 
 
 def test_marquise_birdsong_places_wood_at_sawmills() -> None:
@@ -294,7 +344,9 @@ def test_marquise_recruit_places_as_many_warriors_as_supply_allows() -> None:
     engine.apply_action(Recruit(clearing_id=8))
 
     assert state.board.warriors[8][Faction.MARQUISE] == before[8] + 1
-    placed = sum(state.board.warriors[cid][Faction.MARQUISE] - before[cid] for cid in (4, 6, 8))
+    placed = sum(
+        state.board.warriors[cid][Faction.MARQUISE] - before[cid] for cid in (4, 6, 8)
+    )
     assert placed == 2
     assert state.marquise.warriors_in_supply == 0
 
@@ -349,14 +401,18 @@ def test_marquise_can_craft_multiple_cards_with_workshop_budget() -> None:
 def test_marquise_crafting_only_offered_before_non_craft_daylight_action() -> None:
     engine = RootEngine(seed=29)
     state = engine.get_state()
-    state.board.buildings[1][Faction.MARQUISE].append(BuildingType.WORKSHOP)  # fox workshop
+    state.board.buildings[1][Faction.MARQUISE].append(
+        BuildingType.WORKSHOP
+    )  # fox workshop
     anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
     state.marquise.hand = [anvil]
 
     engine.apply_action(EndPhase())  # birdsong -> daylight
     assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
 
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    recruit = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Recruit)
+    )
     engine.apply_action(recruit)
     assert not any(isinstance(action, Craft) for action in engine.get_valid_actions())
 
@@ -369,12 +425,16 @@ def test_eyrie_birdsong_can_add_cards_to_decree() -> None:
         engine.apply_action(EndPhase())
 
     state = engine.get_state()
-    assert not any(isinstance(action, EndPhase) for action in engine.get_valid_actions())
+    assert not any(
+        isinstance(action, EndPhase) for action in engine.get_valid_actions()
+    )
     card_id = state.eyrie.hand[0]
     add = next(
         action
         for action in engine.get_valid_actions()
-        if isinstance(action, AddToDecree) and action.card_id == card_id and action.column == "recruit"
+        if isinstance(action, AddToDecree)
+        and action.card_id == card_id
+        and action.column == "recruit"
     )
     engine.apply_action(add)
     assert card_id in state.eyrie.decree["recruit"]
@@ -393,27 +453,41 @@ def test_eyrie_daylight_craft_before_resolving_decree() -> None:
     anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
     state.eyrie.hand = [anvil]
     state.eyrie.decree["recruit"] = [anvil]
-    state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox roost for crafting
+    state.board.buildings[6][Faction.EYRIE].append(
+        BuildingType.ROOST
+    )  # fox roost for crafting
 
     state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
     assert any(isinstance(action, Craft) for action in engine.get_valid_actions())
     engine.apply_action(Craft(card_id=anvil))
     assert state.scores[Faction.EYRIE] == 1
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    recruit = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Recruit)
+    )
     engine.apply_action(recruit)
     assert not state.eyrie.crafting_window_open
 
 
-def test_eyrie_roost_scores_in_evening_based_on_total_roosts_and_gets_draw_bonus() -> None:
-    engine = RootEngine(seed=305, excluded_factions={Faction.MARQUISE, Faction.ALLIANCE, Faction.VAGABOND})
+def test_eyrie_roost_scores_in_evening_based_on_total_roosts_and_gets_draw_bonus() -> (
+    None
+):
+    engine = RootEngine(
+        seed=305,
+        excluded_factions={Faction.MARQUISE, Faction.ALLIANCE, Faction.VAGABOND},
+    )
     while engine.get_state().turn.current_faction != Faction.EYRIE:
         engine.apply_action(EndPhase())
         engine.apply_action(EndPhase())
         engine.apply_action(EndPhase())
     state = engine.get_state()
     state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": [-104]}
-    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [],
+        "move": [],
+        "battle": [],
+        "build": [-104],
+    }
     state.eyrie.birdsong_cards_added = 1
     state.board.warriors[11][Faction.EYRIE] = 2
     state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST]
@@ -421,14 +495,21 @@ def test_eyrie_roost_scores_in_evening_based_on_total_roosts_and_gets_draw_bonus
     state.scores[Faction.EYRIE] = 0
 
     engine.apply_action(EndPhase())  # birdsong -> daylight
-    build = next(action for action in engine.get_valid_actions() if isinstance(action, Build))
+    build = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Build)
+    )
     engine.apply_action(build)
     assert state.scores[Faction.EYRIE] == 0
 
     state.eyrie.roosts_in_supply = 2  # simulate five roosts already on map
     state.board.buildings[12][Faction.EYRIE] = [BuildingType.ROOST] * 5
     state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": []}
-    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [],
+        "move": [],
+        "battle": [],
+        "build": [],
+    }
     hand_before_evening = len(state.eyrie.hand)
     engine.apply_action(EndPhase())  # daylight -> evening
     engine.apply_action(EndPhase())  # evening resolution
@@ -445,7 +526,12 @@ def test_eyrie_move_decree_allows_moving_multiple_warriors() -> None:
     state = engine.get_state()
 
     state.eyrie.decree = {"recruit": [], "move": [-102], "battle": [], "build": []}
-    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [-102], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [],
+        "move": [-102],
+        "battle": [],
+        "build": [],
+    }
     state.eyrie.birdsong_cards_added = 1
     state.board.warriors[12][Faction.EYRIE] = 6
 
@@ -458,10 +544,14 @@ def test_eyrie_move_decree_allows_moving_multiple_warriors() -> None:
     engine.apply_action(source_action)
 
     destination_actions = [
-        action for action in engine.get_valid_actions() if isinstance(action, SelectMoveDestination)
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectMoveDestination)
     ]
     assert any(action.warriors == 6 for action in destination_actions)
-    move_all_action = next(action for action in destination_actions if action.warriors == 6)
+    move_all_action = next(
+        action for action in destination_actions if action.warriors == 6
+    )
     destination = move_all_action.clearing_id
     before_destination = state.board.warriors[destination][Faction.EYRIE]
 
@@ -480,16 +570,32 @@ def test_eyrie_resolves_decree_in_column_order_and_turmoils_if_stuck() -> None:
     state = engine.get_state()
 
     fox_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.FOX)
-    mouse_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE and cid != fox_card)
-    state.eyrie.decree = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
-    state.eyrie.decree_cards_remaining = {"recruit": [fox_card], "move": [mouse_card], "battle": [], "build": []}
+    mouse_card = next(
+        cid
+        for cid, card in state.cards.items()
+        if card.suit == Suit.MOUSE and cid != fox_card
+    )
+    state.eyrie.decree = {
+        "recruit": [fox_card],
+        "move": [mouse_card],
+        "battle": [],
+        "build": [],
+    }
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [fox_card],
+        "move": [mouse_card],
+        "battle": [],
+        "build": [],
+    }
     state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing
     state.board.warriors[12][Faction.EYRIE] = 0
     state.eyrie.warriors_in_supply += 6
 
     state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    recruit = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Recruit)
+    )
     engine.apply_action(recruit)
     actions = engine.get_valid_actions()
     assert not any(isinstance(action, Recruit) for action in actions)
@@ -507,9 +613,16 @@ def test_eyrie_turmoil_causes_bird_card_point_loss_and_moves_to_evening() -> Non
     bird_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.BIRD)
     clearing_suit = state.board.clearings[6].suit
     off_suit_card = next(
-        cid for cid, card in state.cards.items() if card.suit not in (Suit.BIRD, clearing_suit)
+        cid
+        for cid, card in state.cards.items()
+        if card.suit not in (Suit.BIRD, clearing_suit)
     )
-    state.eyrie.decree = {"recruit": [bird_card, -101], "move": [off_suit_card], "battle": [], "build": []}
+    state.eyrie.decree = {
+        "recruit": [bird_card, -101],
+        "move": [off_suit_card],
+        "battle": [],
+        "build": [],
+    }
     state.eyrie.decree_cards_remaining = {
         "recruit": [bird_card, -101],
         "move": [off_suit_card],
@@ -519,23 +632,33 @@ def test_eyrie_turmoil_causes_bird_card_point_loss_and_moves_to_evening() -> Non
     for cid in state.board.clearings:
         state.board.warriors[cid][Faction.EYRIE] = 0
         state.board.buildings[cid][Faction.EYRIE] = [
-            b for b in state.board.buildings[cid][Faction.EYRIE] if b != BuildingType.ROOST
+            b
+            for b in state.board.buildings[cid][Faction.EYRIE]
+            if b != BuildingType.ROOST
         ]
-    state.board.buildings[6][Faction.EYRIE].append(BuildingType.ROOST)  # fox clearing for recruit
+    state.board.buildings[6][Faction.EYRIE].append(
+        BuildingType.ROOST
+    )  # fox clearing for recruit
     state.eyrie.warriors_in_supply = 20
     state.scores[Faction.EYRIE] = 4
 
     state.eyrie.birdsong_cards_added = 1
     engine.apply_action(EndPhase())  # birdsong -> daylight
     for _ in range(2):
-        recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+        recruit = next(
+            action
+            for action in engine.get_valid_actions()
+            if isinstance(action, Recruit)
+        )
         engine.apply_action(recruit)
     engine.apply_action(FallIntoTurmoil())
 
     assert state.scores[Faction.EYRIE] == 2
     assert bird_card in state.discard_pile
     assert off_suit_card in state.discard_pile
-    assert all(card_id > 0 for cards in state.eyrie.decree.values() for card_id in cards)
+    assert all(
+        card_id > 0 for cards in state.eyrie.decree.values() for card_id in cards
+    )
     engine.apply_action(SelectEyrieLeader("despot"))
     assert state.turn.phase == Phase.EVENING
     assert all(not isinstance(action, Recruit) for action in engine.get_valid_actions())
@@ -560,14 +683,26 @@ def test_eyrie_does_not_reinitialize_decree_after_finishing_all_cards() -> None:
     state.eyrie.birdsong_cards_added = 1
 
     engine.apply_action(EndPhase())  # birdsong -> daylight
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    recruit = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Recruit)
+    )
     engine.apply_action(recruit)
-    move_source = next(action for action in engine.get_valid_actions() if isinstance(action, SelectMoveSource))
+    move_source = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectMoveSource)
+    )
     engine.apply_action(move_source)
-    destination_actions = [action for action in engine.get_valid_actions() if isinstance(action, SelectMoveDestination)]
+    destination_actions = [
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, SelectMoveDestination)
+    ]
     move_destination = max(destination_actions, key=lambda action: action.warriors)
     engine.apply_action(move_destination)
-    build = next(action for action in engine.get_valid_actions() if isinstance(action, Build))
+    build = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Build)
+    )
     engine.apply_action(build)
 
     actions = engine.get_valid_actions()
@@ -584,7 +719,12 @@ def test_eyrie_recruit_decree_turmoils_when_warrior_supply_empty() -> None:
     state = engine.get_state()
 
     state.eyrie.decree = {"recruit": [-101], "move": [], "battle": [], "build": []}
-    state.eyrie.decree_cards_remaining = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [-101],
+        "move": [],
+        "battle": [],
+        "build": [],
+    }
     state.eyrie.birdsong_cards_added = 1
     state.eyrie.warriors_in_supply = 0
 
@@ -595,7 +735,9 @@ def test_eyrie_recruit_decree_turmoils_when_warrior_supply_empty() -> None:
     assert any(isinstance(action, FallIntoTurmoil) for action in actions)
 
 
-def test_eyrie_charismatic_recruit_uses_remaining_warriors_without_negative_supply() -> None:
+def test_eyrie_charismatic_recruit_uses_remaining_warriors_without_negative_supply() -> (
+    None
+):
     engine = RootEngine(seed=412)
     while engine.get_state().turn.current_faction != Faction.EYRIE:
         engine.apply_action(EndPhase())
@@ -605,13 +747,20 @@ def test_eyrie_charismatic_recruit_uses_remaining_warriors_without_negative_supp
 
     state.eyrie.leader = "charismatic"
     state.eyrie.decree = {"recruit": [-101], "move": [], "battle": [], "build": []}
-    state.eyrie.decree_cards_remaining = {"recruit": [-101], "move": [], "battle": [], "build": []}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [-101],
+        "move": [],
+        "battle": [],
+        "build": [],
+    }
     state.eyrie.birdsong_cards_added = 1
     state.eyrie.warriors_in_supply = 1
     before = state.board.warriors[12][Faction.EYRIE]
 
     engine.apply_action(EndPhase())  # birdsong -> daylight
-    recruit = next(action for action in engine.get_valid_actions() if isinstance(action, Recruit))
+    recruit = next(
+        action for action in engine.get_valid_actions() if isinstance(action, Recruit)
+    )
     engine.apply_action(recruit)
 
     assert state.board.warriors[12][Faction.EYRIE] == before + 1
@@ -654,7 +803,12 @@ def test_eyrie_cannot_build_more_than_one_roost_in_a_clearing() -> None:
         engine.apply_action(EndPhase())
     state = engine.get_state()
     state.eyrie.decree = {"recruit": [], "move": [], "battle": [], "build": [-104]}
-    state.eyrie.decree_cards_remaining = {"recruit": [], "move": [], "battle": [], "build": [-104]}
+    state.eyrie.decree_cards_remaining = {
+        "recruit": [],
+        "move": [],
+        "battle": [],
+        "build": [-104],
+    }
     state.eyrie.birdsong_cards_added = 1
     state.board.warriors[12][Faction.EYRIE] = 1
 
@@ -665,7 +819,9 @@ def test_eyrie_cannot_build_more_than_one_roost_in_a_clearing() -> None:
         for action in engine.get_valid_actions()
     )
     with pytest.raises(ValueError, match="already has a roost"):
-        eyrie_rules.apply_build(state, Build(clearing_id=12, building_type=BuildingType.ROOST))
+        eyrie_rules.apply_build(
+            state, Build(clearing_id=12, building_type=BuildingType.ROOST)
+        )
 
 
 def test_keep_blocks_non_marquise_piece_placement() -> None:
@@ -676,7 +832,9 @@ def test_keep_blocks_non_marquise_piece_placement() -> None:
     with pytest.raises(ValueError):
         eyrie_rules.apply_recruit(state, Recruit(clearing_id=keep))
     with pytest.raises(ValueError):
-        eyrie_rules.apply_build(state, Build(clearing_id=keep, building_type=BuildingType.ROOST))
+        eyrie_rules.apply_build(
+            state, Build(clearing_id=keep, building_type=BuildingType.ROOST)
+        )
 
 
 def test_keep_blocks_alliance_piece_placement_actions() -> None:
@@ -690,7 +848,9 @@ def test_keep_blocks_alliance_piece_placement_actions() -> None:
         pytest.skip("Keep clearing must be fox/rabbit/mouse for revolt test setup")
 
     state.board.tokens[keep][Faction.ALLIANCE].append(TokenType.SYMPATHY)
-    suit_supporters = [cid for cid, card in state.cards.items() if card.suit in (keep_suit, Suit.BIRD)]
+    suit_supporters = [
+        cid for cid, card in state.cards.items() if card.suit in (keep_suit, Suit.BIRD)
+    ]
     state.alliance.supporters = suit_supporters[:4]
 
     with pytest.raises(ValueError):
@@ -709,7 +869,9 @@ def test_keep_blocks_alliance_piece_placement_actions() -> None:
         alliance_rules.apply_recruit(state, Recruit(clearing_id=keep))
 
 
-def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep() -> None:
+def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep() -> (
+    None
+):
     engine = RootEngine(seed=59)
     state = engine.get_state()
     keep = state.marquise.keep_clearing
@@ -717,10 +879,16 @@ def test_field_hospitals_spends_matching_card_and_moves_removed_warriors_to_keep
     battle_clearing = 2
     state.board.warriors[battle_clearing][Faction.MARQUISE] = 2
     state.board.warriors[battle_clearing][Faction.EYRIE] = 2
-    fox_card = next(cid for cid, card in state.cards.items() if card.suit == state.board.clearings[battle_clearing].suit)
+    fox_card = next(
+        cid
+        for cid, card in state.cards.items()
+        if card.suit == state.board.clearings[battle_clearing].suit
+    )
     state.marquise.hand = [fox_card]
     keep_before = state.board.warriors[keep][Faction.MARQUISE]
-    combat_rules.resolve_basic_battle(state, Faction.EYRIE, Faction.MARQUISE, battle_clearing)
+    combat_rules.resolve_basic_battle(
+        state, Faction.EYRIE, Faction.MARQUISE, battle_clearing
+    )
     assert fox_card in state.discard_pile
     assert state.board.warriors[keep][Faction.MARQUISE] == keep_before + 1
 
@@ -748,7 +916,9 @@ def test_alliance_birdsong_offers_revolt_and_sympathy_actions() -> None:
     _advance_to_alliance_birdsong(engine)
     state = engine.get_state()
     state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
-    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:2]
+    bird_supporters = [
+        cid for cid, card in state.cards.items() if card.suit == Suit.BIRD
+    ][:2]
     state.alliance.supporters = list(bird_supporters)
 
     actions = engine.get_valid_actions()
@@ -763,7 +933,9 @@ def test_alliance_revolt_removes_enemy_pieces_places_base_and_officer() -> None:
     state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     state.board.tokens[5][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     state.alliance.sympathy_in_supply = 8
-    rabbit_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT][:2]
+    rabbit_supporters = [
+        cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT
+    ][:2]
     state.alliance.supporters = list(rabbit_supporters)
     state.board.warriors[2][Faction.MARQUISE] = 2
     state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
@@ -809,7 +981,9 @@ def test_alliance_spread_sympathy_accounts_for_martial_law_cost() -> None:
     state = engine.get_state()
     state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     state.alliance.sympathy_in_supply = 9
-    mouse_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE][:3]
+    mouse_supporters = [
+        cid for cid, card in state.cards.items() if card.suit == Suit.MOUSE
+    ][:3]
     state.alliance.supporters = list(mouse_supporters)
     state.board.warriors[3][Faction.MARQUISE] = 3
     before_score = state.scores[Faction.ALLIANCE]
@@ -825,16 +999,22 @@ def test_alliance_can_spread_sympathy_multiple_times_in_birdsong_if_legal() -> N
     engine = RootEngine(seed=83)
     _advance_to_alliance_birdsong(engine)
     state = engine.get_state()
-    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:5]
+    bird_supporters = [
+        cid for cid, card in state.cards.items() if card.suit == Suit.BIRD
+    ][:5]
     state.alliance.supporters = list(bird_supporters)
     state.alliance.sympathy_in_supply = 10
 
-    first_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    first_spread = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy)
+    )
     engine.apply_action(first_spread)
     assert engine.get_state().turn.phase == Phase.BIRDSONG
     assert any(isinstance(a, SpreadSympathy) for a in engine.get_valid_actions())
 
-    second_spread = next(a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy))
+    second_spread = next(
+        a for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy)
+    )
     engine.apply_action(second_spread)
     assert engine.get_state().turn.phase == Phase.BIRDSONG
 
@@ -846,10 +1026,16 @@ def test_alliance_spread_sympathy_cost_uses_tokens_on_map_not_supply_counter() -
     state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     # Simulate an out-of-sync counter from previous effects/edits.
     state.alliance.sympathy_in_supply = 6
-    bird_supporters = [cid for cid, card in state.cards.items() if card.suit == Suit.BIRD][:2]
+    bird_supporters = [
+        cid for cid, card in state.cards.items() if card.suit == Suit.BIRD
+    ][:2]
     state.alliance.supporters = list(bird_supporters)
 
-    legal_spread_clearings = {a.clearing_id for a in engine.get_valid_actions() if isinstance(a, SpreadSympathy)}
+    legal_spread_clearings = {
+        a.clearing_id
+        for a in engine.get_valid_actions()
+        if isinstance(a, SpreadSympathy)
+    }
     assert 3 in legal_spread_clearings
 
 
@@ -864,12 +1050,16 @@ def test_alliance_spread_sympathy_cost_uses_tokens_on_map_not_supply_counter() -
         (9, 3),
     ],
 )
-def test_alliance_sympathy_cost_track_by_tokens_on_map(tokens_on_map: int, expected_cost: int) -> None:
+def test_alliance_sympathy_cost_track_by_tokens_on_map(
+    tokens_on_map: int, expected_cost: int
+) -> None:
     engine = RootEngine(seed=97)
     state = engine.get_state()
     state.alliance.supporters = []
     suit = state.board.clearings[1].suit
-    matching_supporters = [cid for cid, card in state.cards.items() if card.suit in (suit, Suit.BIRD)]
+    matching_supporters = [
+        cid for cid, card in state.cards.items() if card.suit in (suit, Suit.BIRD)
+    ]
     state.alliance.supporters = matching_supporters[:expected_cost]
     for cid in range(1, 1 + tokens_on_map):
         state.board.tokens[cid][Faction.ALLIANCE].append(TokenType.SYMPATHY)
@@ -890,7 +1080,9 @@ def test_alliance_sympathy_cost_track_by_tokens_on_map(tokens_on_map: int, expec
         (10, 4),
     ],
 )
-def test_alliance_sympathy_vp_track_progression(tokens_on_map: int, expected_vp_reward: int) -> None:
+def test_alliance_sympathy_vp_track_progression(
+    tokens_on_map: int, expected_vp_reward: int
+) -> None:
     engine = RootEngine(seed=101)
     state = engine.get_state()
     for cid in range(1, 1 + tokens_on_map):
@@ -903,7 +1095,9 @@ def test_alliance_spend_supporters_prefers_non_bird_cards() -> None:
     engine = RootEngine(seed=102)
     state = engine.get_state()
     target_suit = Suit.RABBIT
-    rabbit_cards = [cid for cid, card in state.cards.items() if card.suit == target_suit][:2]
+    rabbit_cards = [
+        cid for cid, card in state.cards.items() if card.suit == target_suit
+    ][:2]
     bird_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.BIRD)
     state.alliance.supporters = [bird_card, rabbit_cards[0], rabbit_cards[1]]
 
@@ -918,8 +1112,14 @@ def test_alliance_daylight_offers_craft_mobilize_and_train() -> None:
     engine = RootEngine(seed=103)
     _advance_to_alliance_birdsong(engine)
     state = engine.get_state()
-    craft_card = next(cid for cid, card in state.cards.items() if card.name == "A Visit to Friends")
-    rabbit_card = next(cid for cid, card in state.cards.items() if card.suit == Suit.RABBIT and cid != craft_card)
+    craft_card = next(
+        cid for cid, card in state.cards.items() if card.name == "A Visit to Friends"
+    )
+    rabbit_card = next(
+        cid
+        for cid, card in state.cards.items()
+        if card.suit == Suit.RABBIT and cid != craft_card
+    )
     state.alliance.hand = [craft_card, rabbit_card]
     state.board.tokens[2][Faction.ALLIANCE].append(TokenType.SYMPATHY)
     state.board.buildings[2][Faction.ALLIANCE].append(BuildingType.BASE)
@@ -927,9 +1127,17 @@ def test_alliance_daylight_offers_craft_mobilize_and_train() -> None:
 
     engine.apply_action(EndPhase())
     actions = engine.get_valid_actions()
-    assert any(isinstance(action, Craft) and action.card_id == craft_card for action in actions)
-    assert any(isinstance(action, Mobilize) and action.card_id == rabbit_card for action in actions)
-    assert any(isinstance(action, Train) and action.card_id == rabbit_card for action in actions)
+    assert any(
+        isinstance(action, Craft) and action.card_id == craft_card for action in actions
+    )
+    assert any(
+        isinstance(action, Mobilize) and action.card_id == rabbit_card
+        for action in actions
+    )
+    assert any(
+        isinstance(action, Train) and action.card_id == rabbit_card
+        for action in actions
+    )
 
 
 def test_alliance_evening_military_operations_limited_by_officers() -> None:
@@ -940,7 +1148,9 @@ def test_alliance_evening_military_operations_limited_by_officers() -> None:
     state.board.warriors[2][Faction.ALLIANCE] = 1
     state.board.warriors[2][Faction.MARQUISE] = 1
     state.board.tokens[2][Faction.ALLIANCE] = [
-        token for token in state.board.tokens[2][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+        token
+        for token in state.board.tokens[2][Faction.ALLIANCE]
+        if token != TokenType.SYMPATHY
     ]
 
     engine.apply_action(EndPhase())  # to Daylight
@@ -1000,7 +1210,9 @@ def test_outrage_on_move_into_sympathetic_clearing_spends_matching_card() -> Non
     mouse_card = next(cid for cid, c in state.cards.items() if c.suit == Suit.MOUSE)
     rabbit_card = next(cid for cid, c in state.cards.items() if c.suit == Suit.RABBIT)
     state.marquise.hand = [rabbit_card, mouse_card]
-    state.board.tokens[3][Faction.ALLIANCE].append(TokenType.SYMPATHY)  # clearing 3 is mouse
+    state.board.tokens[3][Faction.ALLIANCE].append(
+        TokenType.SYMPATHY
+    )  # clearing 3 is mouse
     state.board.warriors[1][Faction.MARQUISE] = 1
     state.decision_context.selected_source = 1
 
@@ -1032,7 +1244,9 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
             marquise_state.board.buildings[cid][Faction.EYRIE].clear()
             marquise_state.board.buildings[cid][Faction.ALLIANCE].clear()
             marquise_state.board.tokens[cid][Faction.ALLIANCE] = [
-                token for token in marquise_state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+                token
+                for token in marquise_state.board.tokens[cid][Faction.ALLIANCE]
+                if token != TokenType.SYMPATHY
             ]
     marquise_state.board.clearings[2].suit = Suit.MOUSE
     marquise_state.board.buildings[2][Faction.EYRIE].append(BuildingType.ROOST)
@@ -1040,13 +1254,20 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
     expected_marquise_delta = sum(
         len(marquise_state.board.buildings[cid][Faction.EYRIE])
         + len(marquise_state.board.buildings[cid][Faction.ALLIANCE])
-        + sum(1 for token in marquise_state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY)
+        + sum(
+            1
+            for token in marquise_state.board.tokens[cid][Faction.ALLIANCE]
+            if token == TokenType.SYMPATHY
+        )
         for cid, clearing in marquise_state.board.clearings.items()
         if clearing.suit == Suit.MOUSE
     )
     before_marquise_score = marquise_state.scores[Faction.MARQUISE]
     marquise_rules._resolve_favor(marquise_state, Suit.MOUSE)
-    assert marquise_state.scores[Faction.MARQUISE] == before_marquise_score + expected_marquise_delta
+    assert (
+        marquise_state.scores[Faction.MARQUISE]
+        == before_marquise_score + expected_marquise_delta
+    )
 
     eyrie_engine = RootEngine(seed=802)
     eyrie_state = eyrie_engine.get_state()
@@ -1055,10 +1276,14 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
             eyrie_state.board.buildings[cid][Faction.MARQUISE].clear()
             eyrie_state.board.buildings[cid][Faction.ALLIANCE].clear()
             eyrie_state.board.tokens[cid][Faction.MARQUISE] = [
-                token for token in eyrie_state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.KEEP
+                token
+                for token in eyrie_state.board.tokens[cid][Faction.MARQUISE]
+                if token != TokenType.KEEP
             ]
             eyrie_state.board.tokens[cid][Faction.ALLIANCE] = [
-                token for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE] if token != TokenType.SYMPATHY
+                token
+                for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE]
+                if token != TokenType.SYMPATHY
             ]
     eyrie_state.board.clearings[2].suit = Suit.MOUSE
     eyrie_state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
@@ -1066,14 +1291,24 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
     expected_eyrie_delta = sum(
         len(eyrie_state.board.buildings[cid][Faction.MARQUISE])
         + len(eyrie_state.board.buildings[cid][Faction.ALLIANCE])
-        + sum(1 for token in eyrie_state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.KEEP)
-        + sum(1 for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE] if token == TokenType.SYMPATHY)
+        + sum(
+            1
+            for token in eyrie_state.board.tokens[cid][Faction.MARQUISE]
+            if token == TokenType.KEEP
+        )
+        + sum(
+            1
+            for token in eyrie_state.board.tokens[cid][Faction.ALLIANCE]
+            if token == TokenType.SYMPATHY
+        )
         for cid, clearing in eyrie_state.board.clearings.items()
         if clearing.suit == Suit.MOUSE
     )
     before_eyrie_score = eyrie_state.scores[Faction.EYRIE]
     eyrie_rules._resolve_favor(eyrie_state, Suit.MOUSE)
-    assert eyrie_state.scores[Faction.EYRIE] == before_eyrie_score + expected_eyrie_delta
+    assert (
+        eyrie_state.scores[Faction.EYRIE] == before_eyrie_score + expected_eyrie_delta
+    )
 
     alliance_engine = RootEngine(seed=803)
     alliance_state = alliance_engine.get_state()
@@ -1082,7 +1317,9 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
             alliance_state.board.buildings[cid][Faction.MARQUISE].clear()
             alliance_state.board.buildings[cid][Faction.EYRIE].clear()
             alliance_state.board.tokens[cid][Faction.MARQUISE] = [
-                token for token in alliance_state.board.tokens[cid][Faction.MARQUISE] if token != TokenType.WOOD
+                token
+                for token in alliance_state.board.tokens[cid][Faction.MARQUISE]
+                if token != TokenType.WOOD
             ]
     alliance_state.board.clearings[2].suit = Suit.MOUSE
     alliance_state.board.buildings[2][Faction.MARQUISE].append(BuildingType.SAWMILL)
@@ -1090,13 +1327,20 @@ def test_favor_scores_for_removed_tokens_and_buildings() -> None:
     expected_alliance_delta = sum(
         len(alliance_state.board.buildings[cid][Faction.MARQUISE])
         + len(alliance_state.board.buildings[cid][Faction.EYRIE])
-        + sum(1 for token in alliance_state.board.tokens[cid][Faction.MARQUISE] if token == TokenType.WOOD)
+        + sum(
+            1
+            for token in alliance_state.board.tokens[cid][Faction.MARQUISE]
+            if token == TokenType.WOOD
+        )
         for cid, clearing in alliance_state.board.clearings.items()
         if clearing.suit == Suit.MOUSE
     )
     before_alliance_score = alliance_state.scores[Faction.ALLIANCE]
     alliance_rules._resolve_favor(alliance_state, Suit.MOUSE)
-    assert alliance_state.scores[Faction.ALLIANCE] == before_alliance_score + expected_alliance_delta
+    assert (
+        alliance_state.scores[Faction.ALLIANCE]
+        == before_alliance_score + expected_alliance_delta
+    )
 
 
 def test_marquise_ai_toggle_off_has_no_autoplay() -> None:
@@ -1143,7 +1387,9 @@ def test_battle_returns_removed_cardboard_to_supply_tracks() -> None:
     state.marquise.buildings_in_supply[BuildingType.SAWMILL] = 5
     state.board.tokens[clearing_id][Faction.MARQUISE] = []
 
-    combat_rules.resolve_basic_battle(state, Faction.EYRIE, Faction.MARQUISE, clearing_id)
+    combat_rules.resolve_basic_battle(
+        state, Faction.EYRIE, Faction.MARQUISE, clearing_id
+    )
 
     assert state.board.buildings[clearing_id][Faction.MARQUISE] == []
     assert state.marquise.buildings_in_supply[BuildingType.SAWMILL] == 6
@@ -1158,7 +1404,9 @@ def test_battle_returns_removed_sympathy_to_supply_track() -> None:
     state.board.tokens[clearing_id][Faction.ALLIANCE] = [TokenType.SYMPATHY]
     state.alliance.sympathy_in_supply = 9
 
-    combat_rules.resolve_basic_battle(state, Faction.MARQUISE, Faction.ALLIANCE, clearing_id)
+    combat_rules.resolve_basic_battle(
+        state, Faction.MARQUISE, Faction.ALLIANCE, clearing_id
+    )
 
     assert state.board.tokens[clearing_id][Faction.ALLIANCE] == []
     assert state.alliance.sympathy_in_supply == 10
@@ -1185,3 +1433,88 @@ def test_revolt_returns_removed_enemy_buildings_to_supply_tracks() -> None:
     assert state.board.buildings[clearing_id][Faction.EYRIE] == []
     assert state.marquise.buildings_in_supply[BuildingType.SAWMILL] == 6
     assert state.eyrie.roosts_in_supply == 6
+
+
+def test_vagabond_setup_has_items_quests_and_ruins() -> None:
+    engine = RootEngine(seed=701)
+    state = engine.get_state()
+
+    assert state.vagabond.location == 0
+    assert state.vagabond.satchel[ItemType.TORCH] == 1
+    assert state.vagabond.satchel[ItemType.SWORD] == 1
+    assert state.vagabond.satchel[ItemType.BOOT] == 1
+    assert state.vagabond.tracks[ItemType.TEAPOT] == 1
+    assert len(state.vagabond.quests_available) == 3
+    assert set(state.board.ruin_items) == {3, 6, 9, 12}
+
+
+def test_vagabond_slip_move_explore_and_refresh_cycle() -> None:
+    engine = RootEngine(
+        seed=702, excluded_factions={Faction.MARQUISE, Faction.EYRIE, Faction.ALLIANCE}
+    )
+    state = engine.get_state()
+
+    slip = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondSlip) and action.destination == 3
+    )
+    engine.apply_action(slip)
+    assert state.vagabond.location == 3
+
+    engine.apply_action(EndPhase())
+    explore = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondExplore)
+    )
+    explored_item = state.board.ruin_items[3][0]
+    engine.apply_action(explore)
+    assert state.scores[Faction.VAGABOND] == 1
+    assert (
+        explored_item in state.vagabond.satchel
+        or explored_item in state.vagabond.tracks
+    )
+    assert state.vagabond.exhausted_items[ItemType.TORCH] == 1
+    assert 3 not in state.board.ruin_items
+
+    move = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondMove)
+    )
+    engine.apply_action(move)
+    assert state.vagabond.exhausted_items[ItemType.BOOT] == 1
+
+    engine.apply_action(EndPhase())
+    engine.apply_action(EndPhase())
+    assert state.turn.phase == Phase.BIRDSONG
+    engine.apply_action(EndPhase())
+    assert state.vagabond.exhausted_items.get(ItemType.TORCH, 0) == 0
+    assert state.vagabond.exhausted_items.get(ItemType.BOOT, 0) == 0
+
+
+def test_vagabond_aid_improves_relationship_and_takes_crafted_item() -> None:
+    engine = RootEngine(seed=703, excluded_factions={Faction.EYRIE, Faction.ALLIANCE})
+    state = engine.get_state()
+    state.turn.current_faction = Faction.VAGABOND
+    state.turn.phase = Phase.DAYLIGHT
+    state.vagabond.location = 1
+    state.vagabond.hand = [
+        card_id
+        for card_id, card in state.cards.items()
+        if card.suit == state.board.clearings[1].suit
+    ][:1]
+    state.crafted_items[Faction.MARQUISE] = {ItemType.COIN: 1}
+
+    aid = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondAid) and action.target_faction == Faction.MARQUISE
+    )
+    engine.apply_action(aid)
+
+    assert state.vagabond.relationships[Faction.MARQUISE] == VagabondRelation.AMIABLE
+    assert state.scores[Faction.VAGABOND] == 1
+    assert state.vagabond.tracks[ItemType.COIN] == 1
+    assert state.crafted_items[Faction.MARQUISE][ItemType.COIN] == 0

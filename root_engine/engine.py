@@ -22,13 +22,27 @@ from .actions import (
     SelectMoveSource,
     SpreadSympathy,
     Train,
+    VagabondAid,
+    VagabondExplore,
+    VagabondMove,
+    VagabondQuest,
+    VagabondRepair,
+    VagabondSlip,
+    VagabondSpecial,
+    VagabondStrike,
 )
 from .enums import Faction
 from .models import GameState
 from .observation import Observation, build_observation
-from .ai.eyrie_ai import SearchConfig as EyrieSearchConfig, choose_action as choose_eyrie_action
-from .ai.marquise_ai import SearchConfig as MarquiseSearchConfig, choose_action as choose_marquise_action
-from .rules import alliance, base_rules, eyrie, marquise
+from .ai.eyrie_ai import (
+    SearchConfig as EyrieSearchConfig,
+    choose_action as choose_eyrie_action,
+)
+from .ai.marquise_ai import (
+    SearchConfig as MarquiseSearchConfig,
+    choose_action as choose_marquise_action,
+)
+from .rules import alliance, base_rules, eyrie, marquise, vagabond
 from .rules.scoring import WINNING_SCORE
 from .state import clone_state, create_initial_state
 from .utils.debug import format_state
@@ -60,11 +74,15 @@ class RootEngine:
             max_depth=eyrie_ai_max_depth,
             branch_factor=eyrie_ai_branch_factor,
         )
-        self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
+        self._state = create_initial_state(
+            seed, excluded_factions=self._excluded_factions
+        )
         self._auto_play_ai_turns_if_enabled()
 
     def reset(self, seed: int | None = None) -> GameState:
-        self._state = create_initial_state(seed, excluded_factions=self._excluded_factions)
+        self._state = create_initial_state(
+            seed, excluded_factions=self._excluded_factions
+        )
         self._auto_play_ai_turns_if_enabled()
         return self._state
 
@@ -93,7 +111,7 @@ class RootEngine:
         elif faction == Faction.ALLIANCE:
             self._apply_alliance_action(action)
         else:
-            raise ValueError("Current faction action handlers are not implemented yet")
+            self._apply_vagabond_action(action)
 
         self._auto_play_ai_turns_if_enabled()
 
@@ -126,7 +144,6 @@ class RootEngine:
 
     def pretty_print(self) -> str:
         return format_state(self._state)
-
 
     def set_marquise_ai_enabled(self, enabled: bool) -> None:
         self._marquise_ai_enabled = enabled
@@ -207,6 +224,30 @@ class RootEngine:
             eyrie.apply_fall_into_turmoil(self._state, action)
         elif isinstance(action, SelectEyrieLeader):
             eyrie.apply_select_leader(self._state, action)
+
+    def _apply_vagabond_action(self, action) -> None:
+        if isinstance(action, VagabondSlip):
+            vagabond.apply_slip(self._state, action)
+        elif isinstance(action, VagabondMove):
+            vagabond.apply_move(self._state, action)
+        elif isinstance(action, VagabondExplore):
+            vagabond.apply_explore(self._state, action)
+        elif isinstance(action, VagabondAid):
+            vagabond.apply_aid(self._state, action)
+        elif isinstance(action, VagabondQuest):
+            vagabond.apply_quest(self._state, action)
+        elif isinstance(action, VagabondStrike):
+            vagabond.apply_strike(self._state, action)
+        elif isinstance(action, VagabondRepair):
+            vagabond.apply_repair(self._state, action)
+        elif isinstance(action, SelectBattleClearing):
+            vagabond.apply_battle_select_clearing(self._state, action)
+        elif isinstance(action, SelectBattleTarget):
+            vagabond.apply_battle_select_target(self._state, action)
+        elif isinstance(action, Craft):
+            vagabond.apply_craft(self._state, action)
+        elif isinstance(action, VagabondSpecial):
+            vagabond.apply_special(self._state, action)
 
     def _apply_alliance_action(self, action) -> None:
         if isinstance(action, Revolt):
