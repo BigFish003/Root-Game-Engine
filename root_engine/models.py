@@ -50,8 +50,11 @@ class BoardState:
 
     clearings: dict[int, Clearing]
     warriors: dict[int, dict[Faction, int]] = field(default_factory=dict)
-    buildings: dict[int, dict[Faction, list[BuildingType]]] = field(default_factory=dict)
+    buildings: dict[int, dict[Faction, list[BuildingType]]] = field(
+        default_factory=dict
+    )
     tokens: dict[int, dict[Faction, list[TokenType]]] = field(default_factory=dict)
+    ruin_items: dict[int, list[ItemType]] = field(default_factory=dict)
 
 
 @dataclass
@@ -124,8 +127,11 @@ class AllianceState:
 @dataclass
 class VagabondState:
     location: Optional[int] = None
+    character: str = "thief"
     satchel: dict[ItemType, int] = field(default_factory=dict)
+    tracks: dict[ItemType, int] = field(default_factory=dict)
     exhausted_items: dict[ItemType, int] = field(default_factory=dict)
+    exhausted_tracks: dict[ItemType, int] = field(default_factory=dict)
     damaged_items: dict[ItemType, int] = field(default_factory=dict)
     relationships: dict[Faction, VagabondRelation] = field(
         default_factory=lambda: {
@@ -134,7 +140,9 @@ class VagabondState:
             Faction.ALLIANCE: VagabondRelation.INDIFFERENT,
         }
     )
+    quests_available: list[str] = field(default_factory=list)
     quests_completed: list[str] = field(default_factory=list)
+    aid_given_this_turn: dict[Faction, int] = field(default_factory=dict)
     hand: list[int] = field(default_factory=list)
     crafted_effects: list[str] = field(default_factory=list)
 
@@ -175,6 +183,9 @@ class GameState:
     turn: TurnState
     decision_context: DecisionContext
     pending_interrupts: list[str] = field(default_factory=list)
+    crafted_items: dict[Faction, dict[ItemType, int]] = field(default_factory=dict)
+    quests: dict[str, dict] = field(default_factory=dict)
+    quest_deck: list[str] = field(default_factory=list)
 
     def faction_state(self, faction: Faction) -> FactionState:
         if faction == Faction.MARQUISE:

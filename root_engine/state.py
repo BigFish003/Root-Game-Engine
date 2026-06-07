@@ -7,7 +7,7 @@ import random
 from typing import Optional
 
 from .cards import create_base_deck
-from .enums import BuildingType, Faction, TokenType
+from .enums import BuildingType, Faction, ItemType, Suit, TokenType
 from .map_data import create_base_map
 from .models import (
     AllianceState,
@@ -34,6 +34,7 @@ def create_initial_state(
         warriors={cid: {f: 0 for f in Faction} for cid in clearings},
         buildings={cid: {f: [] for f in Faction} for cid in clearings},
         tokens={cid: {f: [] for f in Faction} for cid in clearings},
+        ruin_items={},
     )
 
     cards = create_base_deck()
@@ -60,6 +61,9 @@ def create_initial_state(
         vagabond=VagabondState(),
         turn=TurnState(),
         decision_context=DecisionContext(),
+        crafted_items={f: {} for f in Faction},
+        quests=_create_quest_lookup(),
+        quest_deck=[],
     )
     state.turn.turn_order = active_factions
     state.turn.current_faction = active_factions[0]
@@ -75,7 +79,9 @@ def clone_state(state: GameState) -> GameState:
     return copy.deepcopy(state)
 
 
-def _setup_starting_positions(state: GameState, excluded_factions: set[Faction]) -> None:
+def _setup_starting_positions(
+    state: GameState, excluded_factions: set[Faction]
+) -> None:
     # Marquise opening: keep + one sawmill/workshop/recruiter + warriors concentrated.
     if Faction.MARQUISE not in excluded_factions:
         keep = 1
@@ -101,7 +107,23 @@ def _setup_starting_positions(state: GameState, excluded_factions: set[Faction])
 
     # Vagabond opening (forest abstracted as clearing 12 adjacency anchor)
     if Faction.VAGABOND not in excluded_factions:
-        state.vagabond.location = 12
+        state.vagabond.location = 0
+        state.vagabond.character = "thief"
+        for item in [ItemType.TORCH, ItemType.SWORD, ItemType.BOOT]:
+            state.vagabond.satchel[item] = state.vagabond.satchel.get(item, 0) + 1
+        state.vagabond.tracks[ItemType.TEAPOT] = 1
+        ruin_items = [ItemType.BAG, ItemType.BOOT, ItemType.HAMMER, ItemType.SWORD]
+        rng = random.Random(state.seed)
+        rng.shuffle(ruin_items)
+        for clearing_id, item in zip([3, 6, 9, 12], ruin_items):
+            state.board.ruin_items[clearing_id] = [item]
+            state.board.clearings[clearing_id].has_ruin = True
+        quest_ids = list(state.quests)
+        rng.shuffle(quest_ids)
+        state.quest_deck = quest_ids
+        state.vagabond.quests_available = [
+            state.quest_deck.pop() for _ in range(min(3, len(state.quest_deck)))
+        ]
 
 
 def _deal_opening_hands(state: GameState, excluded_factions: set[Faction]) -> None:
@@ -132,3 +154,21 @@ def _assign_eyrie_leader_viziers(state: GameState, leader: str) -> None:
 
 def _leader_vizier_card_ids() -> dict[str, int]:
     return {"recruit": -101, "move": -102, "battle": -103, "build": -104}
+
+
+def _create_quest_lookup() -> dict[str, dict]:
+    specs = [
+        ("errand_fox", Suit.FOX, (ItemType.BOOT, ItemType.TORCH)),
+        ("escort_fox", Suit.FOX, (ItemType.BOOT, ItemType.SWORD)),
+        ("repair_shed_fox", Suit.FOX, (ItemType.HAMMER, ItemType.TORCH)),
+        ("errand_rabbit", Suit.RABBIT, (ItemType.BOOT, ItemType.TORCH)),
+        ("guard_duty_rabbit", Suit.RABBIT, (ItemType.SWORD, ItemType.TORCH)),
+        ("fundraising_rabbit", Suit.RABBIT, (ItemType.COIN, ItemType.TEAPOT)),
+        ("errand_mouse", Suit.MOUSE, (ItemType.BOOT, ItemType.TORCH)),
+        ("expel_bandits_mouse", Suit.MOUSE, (ItemType.SWORD, ItemType.CROSSBOW)),
+        ("logistics_mouse", Suit.MOUSE, (ItemType.BAG, ItemType.BOOT)),
+    ]
+    return {
+        quest_id: {"id": quest_id, "suit": suit, "items": items}
+        for quest_id, suit, items in specs
+    }
