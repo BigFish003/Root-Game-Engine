@@ -101,6 +101,24 @@ def test_eyrie_observation_exposes_decree_suits() -> None:
     assert eyrie_public["decree_suits"]["move"] == ["mouse"]
 
 
+def test_visual_renderer_includes_vagabond_panel_for_state_and_observation() -> None:
+    engine = RootEngine(seed=166)
+    renderer = VisualRenderer()
+
+    full_svg = renderer.render(engine.get_state())
+    vagabond_obs_svg = renderer.render(engine.get_observation(Faction.VAGABOND))
+
+    assert "Vagabond" in full_svg
+    assert "Location: forest" in full_svg
+    assert "Satchel:" in full_svg
+    assert "Tracks:" in full_svg
+    assert "Relations:" in full_svg
+    assert "Quests:" in full_svg
+    assert "Ruins:" in full_svg
+    assert "Observer view" in vagabond_obs_svg
+    assert "Satchel:" in vagabond_obs_svg
+
+
 def test_renderer_factory_returns_requested_renderers() -> None:
     assert isinstance(get_renderer("text"), TextRenderer)
     assert isinstance(get_renderer("visual"), VisualRenderer)
