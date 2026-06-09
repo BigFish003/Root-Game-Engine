@@ -156,3 +156,4 @@ class VagabondSpecial(Action):
 @dataclass(frozen=True)
 class VagabondSlip(Action):
     destination: int
+    destination_is_forest: bool = False

@@ -2,8 +2,26 @@
 
 from __future__ import annotations
 
-from ..enums import BuildingType, Faction, Suit, TokenType
-from ..models import GameState
+from ..enums import BuildingType, CardTag, Faction, ItemType, Suit, TokenType
+from ..models import Card, GameState
+
+
+INITIAL_ITEM_SUPPLY: dict[ItemType, int] = {
+    ItemType.BOOT: 2,
+    ItemType.BAG: 2,
+    ItemType.CROSSBOW: 1,
+    ItemType.HAMMER: 1,
+    ItemType.SWORD: 2,
+    ItemType.TEAPOT: 2,
+    ItemType.COIN: 2,
+    ItemType.TORCH: 0,
+}
+
+
+def create_item_supply() -> dict[ItemType, int]:
+    """Return the shared craftable item supply for setup."""
+
+    return dict(INITIAL_ITEM_SUPPLY)
 
 
 def legal_craft_cards(state: GameState, hand: list[int], faction: Faction) -> list[int]:
@@ -11,32 +29,72 @@ def legal_craft_cards(state: GameState, hand: list[int], faction: Faction) -> li
 
     if faction == Faction.EYRIE:
         available = _eyrie_crafting_power(state)
-        return [
-            cid
-            for cid in hand
-            if state.cards[cid].craftable
-            and _can_pay(state.cards[cid].craft_cost, state.cards[cid].craft_cost_any, dict(available))
-        ]
+        return _legal_from_power(state, hand, faction, available)
     if faction == Faction.ALLIANCE:
         available = _alliance_crafting_power(state)
+        return _legal_from_power(state, hand, faction, available)
+    if faction != Faction.MARQUISE:
         return [
             cid
             for cid in hand
-            if state.cards[cid].craftable
-            and _can_pay(state.cards[cid].craft_cost, state.cards[cid].craft_cost_any, dict(available))
+            if cid in state.cards and can_craft_card_effect(state, faction, state.cards[cid])
         ]
-    if faction != Faction.MARQUISE:
-        return [cid for cid in hand if state.cards[cid].craftable]
 
     available = dict(state.marquise.crafting_power)
+    return _legal_from_power(state, hand, faction, available)
+
+
+def _legal_from_power(
+    state: GameState,
+    hand: list[int],
+    faction: Faction,
+    available: dict[Suit, int],
+) -> list[int]:
     legal: list[int] = []
     for cid in hand:
-        card = state.cards[cid]
-        if not card.craftable:
+        if cid not in state.cards:
             continue
-        if _can_pay(card.craft_cost, card.craft_cost_any, available):
+        card = state.cards[cid]
+        if not can_craft_card_effect(state, faction, card):
+            continue
+        if _can_pay(card.craft_cost, card.craft_cost_any, dict(available)):
             legal.append(cid)
     return legal
+
+
+def can_craft_card_effect(state: GameState, faction: Faction, card: Card) -> bool:
+    """Return whether a card's non-cost constraints allow crafting."""
+
+    if not card.craftable:
+        return False
+    if (
+        CardTag.PERSISTENT_EFFECT in card.tags
+        and card.name in state.faction_state(faction).crafted_effects
+    ):
+        return False
+    if card.item_reward is not None and state.item_supply.get(card.item_reward, 0) <= 0:
+        return False
+    return True
+
+
+def record_crafted_card(state: GameState, faction: Faction, card_id: int) -> None:
+    """Record that a faction crafted a card, including immediate cards."""
+
+    crafted = state.crafted_cards.setdefault(faction, [])
+    crafted.append(card_id)
+
+
+def take_item_from_supply(state: GameState, item: ItemType) -> None:
+    """Remove one item from the shared craftable item supply."""
+
+    if state.item_supply.get(item, 0) <= 0:
+        raise ValueError(f"No {item.value} items remain in the shared item supply")
+    state.item_supply[item] -= 1
+
+
+def add_crafted_item(state: GameState, faction: Faction, item: ItemType) -> None:
+    crafted = state.crafted_items.setdefault(faction, {})
+    crafted[item] = crafted.get(item, 0) + 1
 
 
 def initialize_marquise_crafting_power(state: GameState) -> None:

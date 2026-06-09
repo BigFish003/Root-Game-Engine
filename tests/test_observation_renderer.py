@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from PIL import Image
+
 from root_engine.engine import RootEngine
-from root_engine.enums import Faction, Suit
+from root_engine.enums import Faction, ItemType, Suit, VagabondRelation
 from root_engine.render import TextRenderer, VisualRenderer, get_renderer
 from root_engine.renderer import RootRenderer
+from state_renderer.render import state_renderer
 
 
 def test_get_observation_hides_other_hands_and_shows_observer_hand() -> None:
@@ -117,6 +120,64 @@ def test_visual_renderer_includes_vagabond_panel_for_state_and_observation() -> 
     assert "Ruins:" in full_svg
     assert "Observer view" in vagabond_obs_svg
     assert "Satchel:" in vagabond_obs_svg
+
+
+def test_observation_exposes_crafted_and_item_supply_state() -> None:
+    engine = RootEngine(seed=167)
+    state = engine.get_state()
+    state.crafted_cards[Faction.MARQUISE] = [1]
+    state.crafted_items[Faction.MARQUISE] = {ItemType.BOOT: 1}
+
+    obs = engine.get_observation(Faction.EYRIE)
+    marquise = obs.factions[Faction.MARQUISE]
+
+    assert obs.item_supply["boot"] == state.item_supply[ItemType.BOOT]
+    observed_forest = obs.forests[state.vagabond.forest_location]
+    actual_forest = state.board.forests[state.vagabond.forest_location]
+    assert observed_forest["adjacent_clearings"] == actual_forest.adjacent_clearings
+    assert observed_forest["adjacent_forests"] == actual_forest.adjacent_forests
+    assert marquise.crafted_cards == [1]
+    assert marquise.crafted_items == {"boot": 1}
+    assert marquise.public_data["crafted_cards"] == [1]
+    assert marquise.public_data["crafted_items"] == {"boot": 1}
+
+
+def test_text_and_svg_renderers_show_crafted_sections_and_vagabond_board() -> None:
+    engine = RootEngine(seed=168)
+    state = engine.get_state()
+    state.vagabond.damaged_items[ItemType.SWORD] = 1
+    state.vagabond.relationships[Faction.MARQUISE] = VagabondRelation.HOSTILE
+
+    text = RootRenderer().render(engine.get_observation(Faction.VAGABOND))
+    svg = VisualRenderer().render(engine.get_observation(Faction.VAGABOND))
+
+    for faction in Faction:
+        assert f"- {faction.value}:" in text
+    assert text.count("Crafted Cards:") == len(Faction)
+    assert text.count("Crafted Items:") == len(Faction)
+    assert "Satchel:" in svg
+    assert "Damaged:" in svg
+    assert "Relations:" in svg
+
+
+def test_pil_renderer_handles_vagabond_clearing_and_forest_locations(tmp_path) -> None:
+    engine = RootEngine(seed=169)
+    render = state_renderer()
+    state = engine.get_state()
+    state.vagabond.location = 6
+    state.vagabond.forest_location = None
+
+    clearing_path = tmp_path / "vagabond_clearing.png"
+    render.render_board(engine.get_observation(Faction.VAGABOND), str(clearing_path))
+    with Image.open(clearing_path) as image:
+        assert image.size == (1600, 1200)
+
+    state.vagabond.location = 0
+    state.vagabond.forest_location = 5
+    forest_path = tmp_path / "vagabond_forest.png"
+    render.render_board(engine.get_observation(Faction.VAGABOND), str(forest_path))
+    with Image.open(forest_path) as image:
+        assert image.size == (1600, 1200)
 
 
 def test_renderer_factory_returns_requested_renderers() -> None:

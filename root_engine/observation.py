@@ -20,6 +20,7 @@ class ObservedClearing:
     suit: Suit
     building_slots: int
     adjacent_clearings: list[int]
+    adjacent_forests: list[int]
     warriors: dict[Faction, int]
     buildings: dict[Faction, list[str]]
     tokens: dict[Faction, list[str]]
@@ -35,6 +36,8 @@ class ObservedFactionBoard:
     hand_count: int
     hand: list[int] | None
     crafted_effects: list[str]
+    crafted_cards: list[int]
+    crafted_items: dict[str, int]
     public_data: dict[str, Any] = field(default_factory=dict)
     private_data: dict[str, Any] = field(default_factory=dict)
 
@@ -52,6 +55,8 @@ class Observation:
     round_number: int
     decision: dict[str, Any]
     factions: dict[Faction, ObservedFactionBoard]
+    forests: dict[int, dict[str, list[int]]]
+    item_supply: dict[str, int]
 
 
 def build_observation(state: GameState, observer: Faction) -> Observation:
@@ -63,6 +68,7 @@ def build_observation(state: GameState, observer: Faction) -> Observation:
             suit=clearing.suit,
             building_slots=clearing.building_slots,
             adjacent_clearings=list(clearing.adjacent_clearings),
+            adjacent_forests=list(clearing.adjacent_forests),
             warriors=dict(state.board.warriors[cid]),
             buildings={
                 f: [b.value for b in bl] for f, bl in state.board.buildings[cid].items()
@@ -85,6 +91,8 @@ def build_observation(state: GameState, observer: Faction) -> Observation:
             hand_count=len(faction_state.hand),
             hand=hand,
             crafted_effects=list(faction_state.crafted_effects),
+            crafted_cards=list(state.crafted_cards.get(faction, [])),
+            crafted_items=_crafted_items_public(state, faction),
             public_data=_public_faction_data(state, faction),
             private_data=_private_faction_data(state, faction, observer),
         )
@@ -104,6 +112,14 @@ def build_observation(state: GameState, observer: Faction) -> Observation:
             "selected_battle_clearing": state.decision_context.selected_battle_clearing,
         },
         factions=faction_views,
+        forests={
+            forest_id: {
+                "adjacent_clearings": list(forest.adjacent_clearings),
+                "adjacent_forests": list(forest.adjacent_forests),
+            }
+            for forest_id, forest in state.board.forests.items()
+        },
+        item_supply={item.value: count for item, count in state.item_supply.items()},
     )
 
 
@@ -123,6 +139,7 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "crafted_items": {
                 k.value: v for k, v in state.crafted_items.get(faction, {}).items()
             },
+            "crafted_cards": list(state.crafted_cards.get(faction, [])),
         }
     if faction == Faction.EYRIE:
         decree = {k: list(v) for k, v in state.eyrie.decree.items()}
@@ -145,6 +162,7 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "crafted_items": {
                 k.value: v for k, v in state.crafted_items.get(faction, {}).items()
             },
+            "crafted_cards": list(state.crafted_cards.get(faction, [])),
         }
     if faction == Faction.ALLIANCE:
         alliance_bases_remaining = {
@@ -162,9 +180,11 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             "crafted_items": {
                 k.value: v for k, v in state.crafted_items.get(faction, {}).items()
             },
+            "crafted_cards": list(state.crafted_cards.get(faction, [])),
         }
     return {
         "location": state.vagabond.location,
+        "forest_location": state.vagabond.forest_location,
         "character": state.vagabond.character,
         "satchel": {k.value: v for k, v in state.vagabond.satchel.items()},
         "tracks": {k.value: v for k, v in state.vagabond.tracks.items()},
@@ -193,7 +213,15 @@ def _public_faction_data(state: GameState, faction: Faction) -> dict[str, Any]:
             cid: [item.value for item in items]
             for cid, items in state.board.ruin_items.items()
         },
+        "crafted_items": {
+            k.value: v for k, v in state.crafted_items.get(faction, {}).items()
+        },
+        "crafted_cards": list(state.crafted_cards.get(faction, [])),
     }
+
+
+def _crafted_items_public(state: GameState, faction: Faction) -> dict[str, int]:
+    return {k.value: v for k, v in state.crafted_items.get(faction, {}).items()}
 
 
 def _private_faction_data(

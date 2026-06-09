@@ -19,6 +19,7 @@ from root_engine.observation import Observation
 
 
 CLEARING_IDS: tuple[int, ...] = tuple(range(1, 13))
+FOREST_IDS: tuple[int, ...] = tuple(range(1, 9))
 CARD_IDS: tuple[int, ...] = tuple(range(1, 55))
 VIZIER_CARD_IDS: tuple[int, ...] = (-101, -102, -103, -104)
 VISIBLE_CARD_IDS: tuple[int, ...] = CARD_IDS + VIZIER_CARD_IDS
@@ -113,6 +114,7 @@ def encode_observation(
 
     _encode_turn_context(builder, obs)
     _encode_scores(builder, obs)
+    _encode_item_supply(builder, obs)
     _encode_decision_context(builder, obs)
     _encode_clearings(builder, obs)
     _encode_faction_boards(builder, obs, observer)
@@ -133,6 +135,14 @@ def _encode_scores(builder: _FeatureBuilder, obs: Observation) -> None:
         builder.one_hot_count(obs.scores.get(faction, 0), MAX_SCORE)
 
 
+def _encode_item_supply(builder: _FeatureBuilder, obs: Observation) -> None:
+    for item_type in ITEM_ORDER:
+        builder.one_hot_count(
+            obs.item_supply.get(item_type.value, 0),
+            MAX_VAGABOND_ITEM_COUNT,
+        )
+
+
 def _encode_decision_context(builder: _FeatureBuilder, obs: Observation) -> None:
     decision_type = _enum_or_none(DecisionType, obs.decision.get("decision_type"))
     builder.one_hot(decision_type, DECISION_ORDER, include_unknown=True)
@@ -148,6 +158,8 @@ def _encode_clearings(builder: _FeatureBuilder, obs: Observation) -> None:
         builder.one_hot_count(clearing.building_slots, MAX_BUILDING_SLOTS)
         for adjacent_id in CLEARING_IDS:
             builder.bool(adjacent_id in clearing.adjacent_clearings)
+        for forest_id in FOREST_IDS:
+            builder.bool(forest_id in clearing.adjacent_forests)
         builder.one_hot(clearing.ruler, FACTION_ORDER, include_unknown=True)
 
         for faction in FACTION_ORDER:
@@ -172,6 +184,12 @@ def _encode_faction_boards(builder: _FeatureBuilder, obs: Observation, observer:
         builder.one_hot_count(board.hand_count, MAX_HAND_COUNT)
         builder.multi_hot_cards(board.hand if faction == observer else [])
         _encode_crafted_effects(builder, board.crafted_effects)
+        builder.multi_hot_cards(board.crafted_cards)
+        for item_type in ITEM_ORDER:
+            builder.one_hot_count(
+                board.crafted_items.get(item_type.value, 0),
+                MAX_VAGABOND_ITEM_COUNT,
+            )
 
         if faction == Faction.MARQUISE:
             _encode_marquise_public(builder, board.public_data)
@@ -235,7 +253,8 @@ def _encode_alliance_private(builder: _FeatureBuilder, private: Mapping[str, Any
 
 def _encode_vagabond_public(builder: _FeatureBuilder, public: Mapping[str, Any]) -> None:
     builder.one_hot_optional_clearing(public.get("location"))
-    for key in ("satchel", "exhausted_items", "damaged_items"):
+    builder.one_hot(public.get("forest_location"), FOREST_IDS, include_unknown=True)
+    for key in ("satchel", "tracks", "exhausted_items", "exhausted_tracks", "damaged_items"):
         items = public.get(key, {})
         for item_type in ITEM_ORDER:
             builder.one_hot_count(items.get(item_type.value, 0), MAX_VAGABOND_ITEM_COUNT)

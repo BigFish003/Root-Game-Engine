@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ..cards import item_type_from_card_name
 from ..actions import (
     AddToDecree,
     Build,
@@ -20,7 +19,12 @@ from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, T
 from ..models import GameState
 from . import alliance as alliance_rules
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
-from .crafting import legal_craft_cards
+from .crafting import (
+    add_crafted_item,
+    legal_craft_cards,
+    record_crafted_card,
+    take_item_from_supply,
+)
 from .movement import legal_move_destinations, legal_move_sources
 
 
@@ -177,16 +181,16 @@ def apply_craft(state: GameState, action: Craft) -> None:
         raise ValueError("Crafting is only available before decree resolution")
     card = state.cards[action.card_id]
     state.eyrie.hand.remove(action.card_id)
-    if CardTag.ITEM in card.tags:
+    record_crafted_card(state, Faction.EYRIE, action.card_id)
+    if card.item_reward is not None:
         state.scores[Faction.EYRIE] += 1
     elif card.vp_on_craft > 0:
         state.scores[Faction.EYRIE] += card.vp_on_craft
     if card.name.startswith("Favor of the"):
         _resolve_favor(state, card.suit)
-    if CardTag.ITEM in card.tags:
-        item = item_type_from_card_name(card.name)
-        crafted = state.crafted_items.setdefault(Faction.EYRIE, {})
-        crafted[item] = crafted.get(item, 0) + 1
+    if card.item_reward is not None:
+        take_item_from_supply(state, card.item_reward)
+        add_crafted_item(state, Faction.EYRIE, card.item_reward)
     if CardTag.PERSISTENT_EFFECT in card.tags:
         state.eyrie.crafted_effects.append(card.name)
     else:

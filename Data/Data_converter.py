@@ -1,8 +1,10 @@
-"""Convert Root_June AI dataset rows into RootEngine instances.
+"""Convert Root_June dataset rows into RootEngine instances.
 
-The mod dataset stores one JSONL row per AI decision.  This module accepts
-either a full JSONL row or the nested ``gameState`` object and rebuilds the
-closest matching simplified ``root_engine`` game.
+The mod currently stores JSONL event rows.  ``turn_end`` rows contain one
+captured end state under ``end_states[0].end_state``; ``game_end`` rows are
+summary-only and cannot be converted to a board state.  Older
+``ai_decisions_*.jsonl`` rows with a top-level ``gameState`` object are still
+accepted.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from root_engine.cards import create_base_deck
 from root_engine.engine import RootEngine
 from root_engine.enums import BuildingType, DecisionType, Faction, Phase, Suit, TokenType
-from root_engine.map_data import create_base_map
+from root_engine.map_data import create_base_forests, create_base_map
 from root_engine.models import BoardState, DecisionContext, GameState
 from root_engine.state import create_initial_state
 
@@ -74,13 +76,40 @@ _PHASE_BY_INDEX: dict[int, Phase] = {
     2: Phase.EVENING,
 }
 
+_EYRIE_DECREE_COLUMNS = ("recruit", "move", "battle", "build")
+_EYRIE_VIZIER_BY_COLUMN = {
+    "recruit": -101,
+    "move": -102,
+    "battle": -103,
+    "build": -104,
+}
+
+# Root_June now writes root_engine clearing ids (1-12).  Keep this hook small
+# and explicit so old/manual remaps can still be applied in one place if needed.
+_UNITY_CLEARING_TO_ENGINE_CLEARING: dict[int, int] = {
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 5,
+    5: 4,
+    6: 6,
+    7: 7,
+    8: 8,
+    9: 12,
+    10: 11,
+    11: 10,
+    12: 9,
+}
+
 
 def gamestate_line_to_root_engine(gamestate_line: str | Mapping[str, Any]) -> RootEngine:
     """Build a ``RootEngine`` from one mod dataset line.
 
     ``gamestate_line`` may be:
-    - a JSONL row from ``ai_decisions_*.jsonl``;
+    - a JSONL ``turn_end`` row from ``turn_end_games_*.jsonl``;
+    - a JSONL row from older ``ai_decisions_*.jsonl`` files;
     - a JSON string containing the nested ``gameState`` object;
+    - a JSON string containing the nested ``end_state`` object;
     - an already parsed dict for either of those shapes.
 
     The returned engine has ``engine.get_state()`` set to the converted state.
@@ -131,6 +160,7 @@ def gamestate_line_to_state(gamestate_line: str | Mapping[str, Any]) -> GameStat
     _apply_board(state, game_state)
     card_allocator = _new_card_allocator()
     _apply_players(state, game_state, card_allocator)
+    _apply_eyrie_decree(state, game_state, card_allocator)
     _apply_table_cards(state, game_state, card_allocator)
     _apply_turn_and_decision(state, game_state)
     _recompute_supplies(state)
@@ -152,10 +182,64 @@ def _parse_payload(value: str | Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _extract_game_state(payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    game_state = payload.get("gameState", payload)
-    if not isinstance(game_state, Mapping):
-        raise ValueError("Dataset row does not contain a gameState object")
-    return game_state
+    row_type = _get(payload, "row_type") or _get(payload, "rowType")
+    if row_type == "game_end":
+        raise ValueError("game_end rows are summaries and do not contain an end_state")
+
+    game_state = _get(payload, "gameState")
+    if isinstance(game_state, Mapping):
+        return game_state
+
+    end_state = _get(payload, "end_state")
+    if isinstance(end_state, Mapping):
+        return end_state
+
+    end_states = _list(_get(payload, "end_states") or _get(payload, "endStates"))
+    if end_states:
+        first = end_states[0]
+        if isinstance(first, Mapping):
+            nested = _get(first, "end_state") or _get(first, "endState")
+            if isinstance(nested, Mapping):
+                return nested
+            if _looks_like_game_state(first):
+                return first
+
+    if _looks_like_game_state(payload):
+        return payload
+
+    raise ValueError("Dataset row does not contain a convertible gameState/end_state object")
+
+
+def iter_turn_end_states(lines: Any) -> list[GameState]:
+    """Convert all ``turn_end`` rows from an iterable of JSONL lines.
+
+    Summary ``game_end`` rows are skipped.  This is handy for reading a whole
+    ``turn_end_games_*.jsonl`` file into per-turn RootEngine states.
+    """
+
+    states: list[GameState] = []
+    for line in lines:
+        payload = _parse_payload(line)
+        if (_get(payload, "row_type") or _get(payload, "rowType")) == "game_end":
+            continue
+        states.append(gamestate_line_to_state(payload))
+    return states
+
+
+def iter_turn_end_engines(lines: Any) -> list[RootEngine]:
+    """Convert all ``turn_end`` rows from an iterable of JSONL lines."""
+
+    engines: list[RootEngine] = []
+    for state in iter_turn_end_states(lines):
+        excluded = {faction for faction in Faction if faction not in state.turn.turn_order}
+        engine = RootEngine(seed=state.seed, excluded_factions=excluded)
+        engine._state = state
+        engines.append(engine)
+    return engines
+
+
+def _looks_like_game_state(value: Mapping[str, Any]) -> bool:
+    return isinstance(_get(value, "players"), list) or isinstance(_get(value, "board"), Mapping)
 
 
 def _active_factions(game_state: Mapping[str, Any]) -> list[Faction]:
@@ -177,16 +261,18 @@ def _active_factions(game_state: Mapping[str, Any]) -> list[Faction]:
 def _reset_board(state: GameState) -> None:
     state.board = BoardState(
         clearings=create_base_map(),
+        forests=create_base_forests(),
         warriors={cid: {faction: 0 for faction in Faction} for cid in state.board.clearings},
         buildings={cid: {faction: [] for faction in Faction} for cid in state.board.clearings},
         tokens={cid: {faction: [] for faction in Faction} for cid in state.board.clearings},
+        ruin_items={},
     )
 
 
 def _apply_board(state: GameState, game_state: Mapping[str, Any]) -> None:
     board = _get(game_state, "board")
     for clearing in _list(_get(board, "clearings")):
-        clearing_id = _int(_get(clearing, "clearingId"))
+        clearing_id = _remap_clearing_id(_int(_get(clearing, "clearingId")))
         if clearing_id not in state.board.clearings:
             continue
 
@@ -206,7 +292,7 @@ def _apply_clearing_metadata(state: GameState, clearing_id: int, clearing: Mappi
     if slots > 0:
         model.building_slots = slots
 
-    adjacent = [_int(value) for value in _list(_get(clearing, "adjacentClearings"))]
+    adjacent = [_remap_clearing_id(_int(value)) for value in _list(_get(clearing, "adjacentClearings"))]
     adjacent = [value for value in adjacent if value in state.board.clearings]
     if adjacent:
         model.adjacent_clearings = adjacent
@@ -239,6 +325,11 @@ def _apply_piece_groups(state: GameState, clearing_id: int, clearing: Mapping[st
         name = _piece_identity(group)
         count = max(1, _int(_get(group, "count"), default=1))
         if owner is None or not name:
+            continue
+
+        if owner == Faction.VAGABOND and "vagabond" in _norm(name):
+            state.vagabond.location = clearing_id
+            state.vagabond.forest_location = None
             continue
 
         building = _building_type(name)
@@ -274,19 +365,49 @@ def _apply_players(
         hand_ids = _cards_from_area(_get(player, "hand"), card_allocator)
         if faction == Faction.MARQUISE:
             state.marquise.hand = hand_ids
-            state.scores[faction] = _int(_get(player, "scoreFromPointSources"))
+            state.scores[faction] = _player_score(player)
         elif faction == Faction.EYRIE:
             state.eyrie.hand = hand_ids
-            state.scores[faction] = _int(_get(player, "scoreFromPointSources"))
+            leader = _leader_name(_get(player, "eyrieLeader"))
+            if leader is not None:
+                state.eyrie.leader = leader
+            state.scores[faction] = _player_score(player)
         elif faction == Faction.ALLIANCE:
             state.alliance.hand = hand_ids
-            state.scores[faction] = _int(_get(player, "scoreFromPointSources"))
+            state.scores[faction] = _player_score(player)
         elif faction == Faction.VAGABOND:
             state.vagabond.hand = hand_ids
-            state.scores[faction] = _int(_get(player, "scoreFromPointSources"))
-            location = _int(_get(player, "currentTurnLocation"), default=0)
+            state.scores[faction] = _player_score(player)
+            location = _remap_clearing_id(_int(_get(player, "currentTurnLocation"), default=0))
             if location in state.board.clearings:
                 state.vagabond.location = location
+
+
+def _apply_eyrie_decree(
+    state: GameState,
+    game_state: Mapping[str, Any],
+    card_allocator: dict[tuple[str, Suit | None], deque[int]],
+) -> None:
+    eyrie_player = None
+    for player in _list(_get(game_state, "players")):
+        if _faction(_get(player, "faction")) == Faction.EYRIE:
+            eyrie_player = player
+            break
+
+    if not isinstance(eyrie_player, Mapping):
+        return
+
+    decree = _get(eyrie_player, "eyrieDecree") or _get(eyrie_player, "eyrie_decree")
+    if not isinstance(decree, Mapping):
+        return
+
+    converted = {column: [] for column in _EYRIE_DECREE_COLUMNS}
+    for column in _EYRIE_DECREE_COLUMNS:
+        converted[column] = _cards_from_decree_area(_get(decree, column), column, card_allocator)
+
+    if any(converted.values()):
+        state.eyrie.decree = converted
+        state.eyrie.decree_cards_remaining = {column: list(cards) for column, cards in converted.items()}
 
 
 def _apply_table_cards(
@@ -301,6 +422,8 @@ def _apply_table_cards(
     used = set(draw_pile) | set(discard_pile)
     for faction in Faction:
         used.update(state.faction_state(faction).hand)
+    for cards in state.eyrie.decree.values():
+        used.update(card_id for card_id in cards if card_id > 0)
 
     if draw_pile:
         state.draw_pile = draw_pile + [card_id for card_id in state.cards if card_id not in used]
@@ -378,6 +501,30 @@ def _cards_from_area(
     return card_ids
 
 
+def _cards_from_decree_area(
+    area: Any,
+    column: str,
+    card_allocator: dict[tuple[str, Suit | None], deque[int]],
+) -> list[int]:
+    card_ids: list[int] = []
+    for entity in _list(_get(area, "entities")):
+        card_id = _card_id_from_decree_entity(entity, column, card_allocator)
+        if card_id is not None:
+            card_ids.append(card_id)
+    return card_ids
+
+
+def _card_id_from_decree_entity(
+    entity: Mapping[str, Any],
+    column: str,
+    card_allocator: dict[tuple[str, Suit | None], deque[int]],
+) -> int | None:
+    identity = _piece_identity(entity)
+    if "vizier" in _norm(identity):
+        return _EYRIE_VIZIER_BY_COLUMN[column]
+    return _card_id_from_entity(entity, card_allocator)
+
+
 def _card_id_from_entity(
     entity: Mapping[str, Any],
     card_allocator: dict[tuple[str, Suit | None], deque[int]],
@@ -389,6 +536,13 @@ def _card_id_from_entity(
     key = _card_key_from_identity(identity)
     if key is None:
         return None
+
+    source_suit = _suit(_get(entity, "suit"))
+    if source_suit is not None:
+        suited_key = (key[0], source_suit)
+        queue = card_allocator.get(suited_key)
+        if queue:
+            return queue.popleft()
 
     queue = card_allocator.get(key)
     if queue:
@@ -431,6 +585,14 @@ def _card_key_from_identity(identity: str) -> tuple[str, Suit | None] | None:
     return value, suit
 
 
+def _leader_name(value: Any) -> str | None:
+    normalized = _norm(value)
+    for leader in ("despot", "commander", "charismatic", "builder"):
+        if leader in normalized:
+            return leader
+    return None
+
+
 def _strip_card_suffix(identity: str) -> str:
     value = _norm(identity)
     for suffix in ("card", "archetype"):
@@ -458,6 +620,13 @@ def _phase_from_player(game_state: Mapping[str, Any], current: Faction) -> Phase
     return None
 
 
+def _player_score(player: Mapping[str, Any]) -> int:
+    score = _get(player, "score")
+    if score is not None:
+        return _int(score)
+    return _int(_get(player, "scoreFromPointSources"))
+
+
 def _count_buildings(state: GameState, faction: Faction, building: BuildingType) -> int:
     return sum(
         1
@@ -475,6 +644,10 @@ def _ensure_building(state: GameState, clearing_id: int, faction: Faction, build
 def _ensure_token(state: GameState, clearing_id: int, faction: Faction, token: TokenType) -> None:
     if token not in state.board.tokens[clearing_id][faction]:
         state.board.tokens[clearing_id][faction].append(token)
+
+
+def _remap_clearing_id(clearing_id: int) -> int:
+    return _UNITY_CLEARING_TO_ENGINE_CLEARING.get(clearing_id, clearing_id)
 
 
 def _building_type(value: Any) -> BuildingType | None:

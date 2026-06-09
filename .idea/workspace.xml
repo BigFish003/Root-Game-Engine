@@ -5,10 +5,28 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="228b6ad4-4916-4774-952d-57096ecc2ed7" name="Changes" comment="Game testing">
-      <change afterPath="$PROJECT_DIR$/Data/Data_converter.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/test1.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Data/Data_converter.py" beforeDir="false" afterPath="$PROJECT_DIR$/Data/Data_converter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/NN/alliance_features.py" beforeDir="false" afterPath="$PROJECT_DIR$/NN/alliance_features.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/game_state.png" beforeDir="false" afterPath="$PROJECT_DIR$/game_state.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/game_tester.py" beforeDir="false" afterPath="$PROJECT_DIR$/game_tester.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/actions.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/actions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/map_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/map_data.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/observation.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/observation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/render.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/render.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/renderer.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/renderer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/rules/alliance.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/rules/alliance.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/rules/crafting.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/rules/crafting.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/rules/eyrie.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/rules/eyrie.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/rules/marquise.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/rules/marquise.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/rules/vagabond.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/rules/vagabond.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root_engine/state.py" beforeDir="false" afterPath="$PROJECT_DIR$/root_engine/state.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/state_renderer/render.py" beforeDir="false" afterPath="$PROJECT_DIR$/state_renderer/render.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test1.py" beforeDir="false" afterPath="$PROJECT_DIR$/test1.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_engine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_observation_renderer.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_observation_renderer.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -58,6 +76,7 @@
     "Python.alliance.executor": "Run",
     "Python.game_tester.executor": "Run",
     "Python.main.executor": "Run",
+    "Python.render.executor": "Run",
     "Python.test1.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "main",
@@ -200,7 +219,15 @@
       <option name="project" value="LOCAL" />
       <updated>1780004056524</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="Game testing">
+      <option name="closed" value="true" />
+      <created>1780852675489</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1780852675489</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -211,16 +238,5 @@
     <MESSAGE value="did some stuff." />
     <MESSAGE value="Game testing" />
     <option name="LAST_COMMIT_MESSAGE" value="Game testing" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/root_engine/rules/alliance.py</url>
-          <line>2</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

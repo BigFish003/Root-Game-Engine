@@ -78,13 +78,15 @@ def _vagabond_lines(payload: GameState | Observation) -> list[str]:
     if isinstance(payload, Observation):
         data = payload.factions[Faction.VAGABOND].public_data
         return [
-            f"Location: {_format_vagabond_location(data.get('location'))}",
+            f"Location: {_format_vagabond_location(data.get('location'), data.get('forest_location'))}",
             f"Character: {data.get('character', 'unknown')}",
             f"Satchel: {_format_mapping(data.get('satchel', {}))}",
             f"Tracks: {_format_mapping(data.get('tracks', {}))}",
             f"Exhausted: {_format_mapping(data.get('exhausted_items', {}))}",
             f"Damaged: {_format_mapping(data.get('damaged_items', {}))}",
             f"Relations: {_format_mapping(data.get('relationships', {}))}",
+            f"Crafted Cards: {_format_sequence(data.get('crafted_cards', []))}",
+            f"Crafted Items: {_format_mapping(data.get('crafted_items', {}))}",
             f"Quests: {_format_sequence(data.get('quests_available', []))}",
             f"Ruins: {_format_ruin_items(data.get('ruin_items', {}))}",
         ]
@@ -95,23 +97,27 @@ def _vagabond_lines(payload: GameState | Observation) -> list[str]:
         for faction, relation in vagabond.relationships.items()
     }
     return [
-        f"Location: {_format_vagabond_location(vagabond.location)}",
+        f"Location: {_format_vagabond_location(vagabond.location, vagabond.forest_location)}",
         f"Character: {vagabond.character}",
         f"Satchel: {_format_mapping(_enum_mapping(vagabond.satchel))}",
         f"Tracks: {_format_mapping(_enum_mapping(vagabond.tracks))}",
         f"Exhausted: {_format_mapping(_enum_mapping(vagabond.exhausted_items))}",
         f"Damaged: {_format_mapping(_enum_mapping(vagabond.damaged_items))}",
         f"Relations: {_format_mapping(relationships)}",
+        f"Crafted Cards: {_format_sequence(payload.crafted_cards.get(Faction.VAGABOND, []))}",
+        f"Crafted Items: {_format_mapping(_enum_mapping(payload.crafted_items.get(Faction.VAGABOND, {})))}",
         f"Quests: {_format_sequence(vagabond.quests_available)}",
         f"Ruins: {_format_ruin_items({cid: [item.value for item in items] for cid, items in payload.board.ruin_items.items()})}",
     ]
 
 
-def _format_vagabond_location(location: object) -> str:
+def _format_vagabond_location(location: object, forest_location: object = None) -> str:
     if location in (None, ""):
         return "not in play"
     if location == 0:
-        return "forest"
+        if forest_location in (None, ""):
+            return "forest"
+        return f"forest {forest_location}"
     return f"clearing {location}"
 
 

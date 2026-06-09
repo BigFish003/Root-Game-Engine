@@ -6,6 +6,11 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+try:
+    from root_engine.cards import create_base_deck
+except ImportError:  # pragma: no cover - keeps direct renderer use working from odd cwd setups.
+    create_base_deck = None
+
 
 class state_renderer:
     """Helpers for rendering and inspecting Root game states."""
@@ -34,7 +39,7 @@ class state_renderer:
             _draw_warrior_piece(x, y, (84, 155, 72))
 
         def make_vagabond_piece(x: int, y: int) -> None:
-            _draw_warrior_piece(x, y, (145, 145, 145))
+            _draw_warrior_piece(x, y, (54, 69, 79))
 
         def _draw_warrior_piece(x: int, y: int, color: tuple[int, int, int]) -> None:
             width, height = 18, 30
@@ -169,6 +174,73 @@ class state_renderer:
             draw.text((left + 8, text_y + 48), f"Victory points: {victory_points}", fill="black", font=font)
             return text_y + 70
 
+        def faction_data(faction_name: str) -> dict[str, Any]:
+            return state_dictionary.get("factions", {}).get(faction_name, {}) or {}
+
+        def faction_public_data(faction_name: str) -> dict[str, Any]:
+            return faction_data(faction_name).get("public_data", {}) or {}
+
+        def faction_crafted_items(faction_name: str) -> dict[str, int]:
+            faction = faction_data(faction_name)
+            public_data = faction.get("public_data", {}) or {}
+            crafted = faction.get("crafted_items") or public_data.get("crafted_items") or {}
+            return {str(item): int(count) for item, count in crafted.items() if int(count) > 0}
+
+        def faction_crafted_cards(faction_name: str) -> list[Any]:
+            faction = faction_data(faction_name)
+            public_data = faction.get("public_data", {}) or {}
+            return list(faction.get("crafted_cards") or public_data.get("crafted_cards") or [])
+
+        def crafted_item_count(faction_name: str) -> int:
+            return sum(faction_crafted_items(faction_name).values())
+
+        def item_summary(items: dict[str, int]) -> str:
+            if not items:
+                return "-"
+            return ", ".join(f"{item} x{count}" for item, count in sorted(items.items()))
+
+        def draw_text_box(
+            rect: tuple[int, int, int, int],
+            title: str,
+            body: str,
+            fill: tuple[int, int, int],
+        ) -> None:
+            left, top, right, bottom = rect
+            draw.rectangle(rect, fill=fill, outline="black", width=1)
+            draw.text((left + 4, top + 3), title, fill="black", font=small_font)
+            body_y = top + 17
+            max_chars = max(8, (right - left - 8) // 6)
+            lines = []
+            text = body or "-"
+            while text:
+                lines.append(text[:max_chars])
+                text = text[max_chars:]
+                if len(lines) >= 2:
+                    if text:
+                        lines[-1] = lines[-1].rstrip() + "..."
+                    break
+            if not lines:
+                lines = ["-"]
+            for idx, line in enumerate(lines):
+                if body_y + idx * 12 < bottom - 2:
+                    draw.text((left + 4, body_y + idx * 12), line, fill="black", font=small_font)
+
+        def draw_crafted_sections(
+            board_rect: tuple[int, int, int, int],
+            faction_name: str,
+            y: int,
+            fill: tuple[int, int, int],
+        ) -> int:
+            left, _, right, _ = board_rect
+            cards = faction_crafted_cards(faction_name)
+            card_text = ", ".join(card_label(card_id) for card_id in cards) if cards else "-"
+            items = faction_crafted_items(faction_name)
+            card_rect = (left + 8, y, right - 8, y + 38)
+            item_rect = (left + 8, y + 42, right - 8, y + 80)
+            draw_text_box(card_rect, "Crafted Cards", card_text, fill)
+            draw_text_box(item_rect, "Crafted Items", item_summary(items), fill)
+            return y + 86
+
         def normalize_suit_symbol(value: Any) -> str:
             v = str(value).lower()
             if v.endswith("fox") or v == "fox":
@@ -214,10 +286,11 @@ class state_renderer:
             draw_faction_counts(
                 board_rect,
                 int(faction_data.get("warriors_in_supply", 0)),
-                len(marquise.get("crafted_effects", [])),
+                crafted_item_count("marquise"),
                 int(marquise.get("hand_count", len(marquise.get("hand") or []))),
                 int(marquise.get("score", state_dictionary.get("scores", {}).get("marquise", 0))),
             )
+            draw_crafted_sections(board_rect, "marquise", board_rect[1] + 112, (236, 205, 148))
 
             left, _, right, bottom = board_rect
             inner_rect = (left + 10, bottom - 132, right - 10, bottom - 10)
@@ -245,10 +318,11 @@ class state_renderer:
             cursor_y = draw_faction_counts(
                 board_rect,
                 int(public_data.get("warriors_in_supply", 0)),
-                len(faction.get("crafted_effects", [])),
+                crafted_item_count("eyrie"),
                 int(faction.get("hand_count", len(faction.get("hand") or []))),
                 int(faction.get("score", state_dictionary.get("scores", {}).get("eyrie", 0))),
             )
+            cursor_y = draw_crafted_sections(board_rect, "eyrie", cursor_y, (212, 227, 240))
 
             leader = str(public_data.get("leader", "")).capitalize()
             draw.text((board_rect[0] + 8, cursor_y), f"Leader: {leader}", fill="black", font=font)
@@ -292,10 +366,11 @@ class state_renderer:
             cursor_y = draw_faction_counts(
                 board_rect,
                 int(public_data.get("warriors_in_supply", 0)),
-                len(faction.get("crafted_effects", [])),
+                crafted_item_count("alliance"),
                 int(faction.get("hand_count", len(faction.get("hand") or []))),
                 int(faction.get("score", state_dictionary.get("scores", {}).get("alliance", 0))),
             )
+            cursor_y = draw_crafted_sections(board_rect, "alliance", cursor_y, (159, 184, 136))
 
             officers = int(public_data.get("officers", 0))
             officer_rect = (board_rect[0] + 8, cursor_y, board_rect[2] - 42, cursor_y + 32)
@@ -343,18 +418,47 @@ class state_renderer:
         def draw_vagabond_board(board_rect: tuple[int, int, int, int]) -> None:
             draw_faction_header(board_rect, "Vagabond", (85, 85, 85))
             faction = state_dictionary.get("factions", {}).get("vagabond", {})
-            draw_faction_counts(
+            public_data = faction.get("public_data", {}) or {}
+            cursor_y = draw_faction_counts(
                 board_rect,
                 0,
-                len(faction.get("crafted_effects", [])),
+                crafted_item_count("vagabond"),
                 int(faction.get("hand_count", len(faction.get("hand") or []))),
                 int(faction.get("score", state_dictionary.get("scores", {}).get("vagabond", 0))),
             )
+            satchel = {str(item): int(count) for item, count in (public_data.get("satchel", {}) or {}).items() if int(count) > 0}
+            tracks = {str(item): int(count) for item, count in (public_data.get("tracks", {}) or {}).items() if int(count) > 0}
+            damaged = {str(item): int(count) for item, count in (public_data.get("damaged_items", {}) or {}).items() if int(count) > 0}
+            relationships = public_data.get("relationships", {}) or {}
+            combined_satchel = dict(satchel)
+            for item, count in tracks.items():
+                combined_satchel[item] = combined_satchel.get(item, 0) + count
+            draw_text_box((board_rect[0] + 8, cursor_y, board_rect[2] - 8, cursor_y + 42), "Satchel", item_summary(combined_satchel), (200, 200, 200))
+            draw_text_box((board_rect[0] + 8, cursor_y + 46, board_rect[2] - 8, cursor_y + 86), "Damaged Items", item_summary(damaged), (185, 185, 185))
+            relation_text = ", ".join(f"{f}:{r}" for f, r in sorted(relationships.items())) if relationships else "-"
+            draw_text_box((board_rect[0] + 8, cursor_y + 90, board_rect[2] - 8, cursor_y + 132), "Relationships", relation_text, (214, 214, 214))
+            draw_crafted_sections(board_rect, "vagabond", cursor_y + 136, (196, 196, 196))
+
+        def card_info_from_id(card_id: Any) -> tuple[str | None, str]:
+            suit = suit_symbol_from_card_id(card_id)
+            if not isinstance(card_id, int):
+                return str(card_id), suit
+
+            raw_cards = state_dictionary.get("raw", {}).get("cards", {}) or {}
+            card = raw_cards.get(str(card_id), {}) if isinstance(raw_cards, dict) else {}
+            if isinstance(card, dict) and card:
+                return str(card.get("name") or card_id), normalize_suit_symbol(card.get("suit", suit))
+
+            card = base_card_lookup.get(card_id)
+            if card is not None:
+                return card.name, normalize_suit_symbol(card.suit)
+
+            return None, suit
 
         def card_label(card_id: Any) -> str:
-            suit = suit_symbol_from_card_id(card_id)
-            if isinstance(card_id, int):
-                return f"{card_id} ({suit})"
+            name, suit = card_info_from_id(card_id)
+            if name:
+                return f"{name} ({suit})"
             return str(card_id)
 
         def draw_observer_private_panel(panel_rect: tuple[int, int, int, int]) -> None:
@@ -422,6 +526,7 @@ class state_renderer:
             draw.text((left + 8, preview_y), f"Top: {preview_text}", fill="black", font=small_font)
 
         state_dictionary = self.build_state_dictionary(observation)
+        base_card_lookup = {card.card_id: card for card in create_base_deck()} if create_base_deck else {}
 
         img = Image.new("RGB", (800, 600), color="white")
         draw = ImageDraw.Draw(img)
@@ -462,18 +567,28 @@ class state_renderer:
         draw_discard_pile_panel((600, 300, 800, 350))
 
         clearing_positions: dict[int, tuple[int, int]] = {
-            1: (90, 45),
-            2: (270, 45),
-            3: (450, 82),
-            4: (90, 140),
+            1: (50, 45),
+            2: (320, 45),
+            3: (480, 82),
+            4: (50, 140),
             5: (240, 120),
             6: (180, 195),
-            7: (330, 170),
-            8: (450, 195),
-            9: (90, 290),
+            7: (350, 170),
+            8: (480, 195),
+            9: (50, 290),
             10: (215, 300),
-            11: (330, 270),
+            11: (340, 280),
             12: (480, 300),
+        }
+        forest_positions: dict[int, tuple[int, int]] = {
+            1: (200, 70),
+            2: (285, 330),
+            3: (120, 120),
+            4: (410, 130),
+            5: (100, 200),
+            6: (380, 235),
+            7: (160, 260),
+            8: (455, 245),
         }
         radius = 45
 
@@ -491,6 +606,11 @@ class state_renderer:
                     continue
                 draw.line((start, end), fill=(210, 180, 140), width=8)
                 drawn_edges.add(edge)
+
+        for forest_id, center in forest_positions.items():
+            fx, fy = center
+            draw.ellipse((fx - 16, fy - 11, fx + 16, fy + 11), fill=(68, 116, 68), outline=(30, 70, 30), width=1)
+            draw.text((fx - 10, fy - 6), f"F{forest_id}", fill="white", font=small_font)
 
         for clearing_id_str, clearing_data in clearings.items():
             clearing_id = int(clearing_id_str)
@@ -531,6 +651,24 @@ class state_renderer:
             for faction in ("marquise", "eyrie", "alliance", "vagabond"):
                 warriors.extend([faction] * int(clearing_data.get("warriors", {}).get(faction, 0)))
             place_warriors(center, warriors)
+
+        vagabond_public = faction_public_data("vagabond")
+        raw_location = vagabond_public.get("location")
+        raw_forest_location = vagabond_public.get("forest_location")
+        try:
+            vagabond_location = int(raw_location) if raw_location is not None else None
+        except (TypeError, ValueError):
+            vagabond_location = None
+        try:
+            forest_location = int(raw_forest_location) if raw_forest_location is not None else None
+        except (TypeError, ValueError):
+            forest_location = None
+        if vagabond_location and vagabond_location in clearing_positions:
+            cx, cy = clearing_positions[vagabond_location]
+            make_vagabond_piece(cx - 11, cy + int(radius * 0.1))
+        elif vagabond_location == 0 and forest_location in forest_positions:
+            fx, fy = forest_positions[forest_location]
+            make_vagabond_piece(fx - 11, fy + 8)
 
         marquise_rect = (0, 350, 200, 600)
         eyrie_rect = (200, 350, 400, 600)
@@ -573,8 +711,10 @@ class state_renderer:
             "scores": raw.get("scores", {}),
             "victory_points": raw.get("victory_points", {}),
             "clearings": raw.get("clearings", {}),
+            "forests": raw.get("forests", {}),
             "paths": raw.get("paths", []),
             "factions": raw.get("factions", {}),
+            "item_supply": raw.get("item_supply", {}),
             "cards": {
                 "deck_count": raw.get("deck_count"),
                 "discard_pile": raw.get("discard_pile", []),

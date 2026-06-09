@@ -22,7 +22,13 @@ class RootRenderer:
         ]
         for faction in Faction:
             board = state.faction_state(faction)
-            lines.append(f"- {faction.value}: score={state.scores[faction]} hand={list(board.hand)}")
+            lines.append(
+                f"- {faction.value}: score={state.scores[faction]} "
+                f"hand={list(board.hand)} "
+                f"Crafted Cards={state.crafted_cards.get(faction, [])} "
+                f"Crafted Items={_format_items(state.crafted_items.get(faction, {}))}"
+            )
+        lines.append(f"Item supply: {_format_items(state.item_supply)}")
         return "\n".join(lines)
 
     def _render_observation(self, obs: Observation) -> str:
@@ -39,6 +45,8 @@ class RootRenderer:
                 else f"hidden(count={board.hand_count})"
             )
             lines.append(f"- {faction.value}: score={board.score} hand={hand_view}")
+            lines.append(f"  Crafted Cards: {board.crafted_cards}")
+            lines.append(f"  Crafted Items: {_format_public_items(board.crafted_items)}")
         lines.extend(self._render_observer_private_lines(obs))
         return "\n".join(lines)
 
@@ -56,3 +64,18 @@ class RootRenderer:
         if "supporters" in board.private_data:
             lines.append(f"- supporters: {board.private_data['supporters']}")
         return lines
+
+
+def _format_items(items: dict) -> str:
+    if not items:
+        return "-"
+    return ", ".join(
+        f"{getattr(item, 'value', item)}={count}"
+        for item, count in sorted(items.items(), key=lambda entry: str(entry[0]))
+    )
+
+
+def _format_public_items(items: dict[str, int]) -> str:
+    if not items:
+        return "-"
+    return ", ".join(f"{item}={count}" for item, count in sorted(items.items()))

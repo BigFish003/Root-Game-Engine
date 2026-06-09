@@ -40,6 +40,7 @@ from root_engine.rules import alliance as alliance_rules
 from root_engine.rules import combat as combat_rules
 from root_engine.rules import eyrie as eyrie_rules
 from root_engine.rules import marquise as marquise_rules
+from root_engine.rules import vagabond as vagabond_rules
 
 
 def _advance_to_alliance_birdsong(engine: RootEngine) -> None:
@@ -1440,6 +1441,7 @@ def test_vagabond_setup_has_items_quests_and_ruins() -> None:
     state = engine.get_state()
 
     assert state.vagabond.location == 0
+    assert state.vagabond.forest_location in state.board.forests
     assert state.vagabond.satchel[ItemType.TORCH] == 1
     assert state.vagabond.satchel[ItemType.SWORD] == 1
     assert state.vagabond.satchel[ItemType.BOOT] == 1
@@ -1518,3 +1520,132 @@ def test_vagabond_aid_improves_relationship_and_takes_crafted_item() -> None:
     assert state.scores[Faction.VAGABOND] == 1
     assert state.vagabond.tracks[ItemType.COIN] == 1
     assert state.crafted_items[Faction.MARQUISE][ItemType.COIN] == 0
+
+
+def test_game_state_tracks_crafted_cards_item_supply_and_forests() -> None:
+    engine = RootEngine(seed=704)
+    state = engine.get_state()
+
+    assert state.item_supply[ItemType.BOOT] == 2
+    assert state.item_supply[ItemType.CROSSBOW] == 1
+    assert state.item_supply[ItemType.TORCH] == 0
+    assert set(state.crafted_cards) == set(Faction)
+    assert set(state.crafted_items) == set(Faction)
+    assert state.board.forests
+    assert state.vagabond.forest_location in state.board.forests
+
+    encoded = engine.to_dict()
+    assert encoded["item_supply"]["boot"] == 2
+    assert "crafted_cards" in encoded
+    assert encoded["vagabond"]["forest_location"] == state.vagabond.forest_location
+
+
+def test_crafting_item_consumes_supply_and_records_crafted_state() -> None:
+    engine = RootEngine(seed=705)
+    state = engine.get_state()
+    state.board.buildings[2][Faction.MARQUISE].append(BuildingType.WORKSHOP)
+    visit = next(cid for cid, card in state.cards.items() if card.name == "A Visit to Friends")
+    state.marquise.hand = [visit]
+    state.item_supply[ItemType.BOOT] = 1
+
+    engine.apply_action(EndPhase())
+    engine.apply_action(Craft(visit))
+
+    assert state.item_supply[ItemType.BOOT] == 0
+    assert state.crafted_items[Faction.MARQUISE][ItemType.BOOT] == 1
+    assert state.crafted_cards[Faction.MARQUISE] == [visit]
+    assert visit in state.discard_pile
+
+
+def test_item_craft_is_not_legal_when_shared_supply_is_empty() -> None:
+    engine = RootEngine(seed=706)
+    state = engine.get_state()
+    state.board.buildings[2][Faction.MARQUISE].append(BuildingType.WORKSHOP)
+    visit = next(cid for cid, card in state.cards.items() if card.name == "A Visit to Friends")
+    state.marquise.hand = [visit]
+    state.item_supply[ItemType.BOOT] = 0
+
+    engine.apply_action(EndPhase())
+
+    assert not any(isinstance(action, Craft) and action.card_id == visit for action in engine.get_valid_actions())
+    with pytest.raises(ValueError, match="Card cannot be crafted"):
+        marquise_rules.apply_craft(state, Craft(visit))
+
+
+def test_vagabond_can_slip_into_specific_forest_state() -> None:
+    engine = RootEngine(seed=707)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.VAGABOND
+    state.turn.phase = Phase.BIRDSONG
+    state.vagabond.location = 0
+    state.vagabond.forest_location = 1
+
+    adjacent_forest_action = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondSlip) and action.destination_is_forest
+    )
+    engine.apply_action(adjacent_forest_action)
+    assert state.vagabond.location == 0
+    assert state.vagabond.forest_location == adjacent_forest_action.destination
+
+    engine = RootEngine(seed=707)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.VAGABOND
+    state.turn.phase = Phase.BIRDSONG
+    state.vagabond.location = 1
+    state.vagabond.forest_location = None
+
+    forest_action = next(
+        action
+        for action in engine.get_valid_actions()
+        if isinstance(action, VagabondSlip) and action.destination_is_forest
+    )
+    engine.apply_action(forest_action)
+
+    assert state.vagabond.location == 0
+    assert state.vagabond.forest_location == forest_action.destination
+
+
+def test_vagabond_damaged_items_are_not_usable_and_ready_items_exhaust() -> None:
+    engine = RootEngine(seed=708)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.VAGABOND
+    state.turn.phase = Phase.DAYLIGHT
+    state.vagabond.location = 1
+    state.vagabond.forest_location = None
+    state.vagabond.satchel.pop(ItemType.BOOT, None)
+    state.vagabond.damaged_items[ItemType.BOOT] = 1
+
+    assert not any(isinstance(action, VagabondMove) for action in engine.get_valid_actions())
+    with pytest.raises(ValueError, match="cannot move"):
+        vagabond_rules.apply_move(state, VagabondMove(2))
+
+    state.vagabond.damaged_items.clear()
+    state.vagabond.satchel[ItemType.BOOT] = 1
+    engine.apply_action(VagabondMove(2))
+
+    assert state.vagabond.location == 2
+    assert state.vagabond.satchel.get(ItemType.BOOT, 0) == 0
+    assert state.vagabond.exhausted_items[ItemType.BOOT] == 1
+
+
+def test_vagabond_crafts_item_into_satchel_and_shared_crafted_state() -> None:
+    engine = RootEngine(seed=709)
+    state = engine.get_state()
+    state.turn.current_faction = Faction.VAGABOND
+    state.turn.phase = Phase.DAYLIGHT
+    state.vagabond.location = 1
+    state.vagabond.forest_location = None
+    state.vagabond.satchel[ItemType.HAMMER] = 1
+    anvil = next(cid for cid, card in state.cards.items() if card.name == "Anvil")
+    state.vagabond.hand = [anvil]
+    state.item_supply[ItemType.HAMMER] = 1
+
+    engine.apply_action(Craft(anvil))
+
+    assert state.item_supply[ItemType.HAMMER] == 0
+    assert state.crafted_cards[Faction.VAGABOND] == [anvil]
+    assert state.crafted_items[Faction.VAGABOND][ItemType.HAMMER] == 1
+    assert state.vagabond.satchel[ItemType.HAMMER] == 1
+    assert state.vagabond.exhausted_items[ItemType.HAMMER] == 1

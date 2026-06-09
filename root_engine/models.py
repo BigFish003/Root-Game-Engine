@@ -30,6 +30,9 @@ class Card:
     craft_cost_any: int = 0
     craftable: bool = True
     vp_on_craft: int = 0
+    item_reward: Optional[ItemType] = None
+    effect_type: str = "immediate"
+    effect_behavior: str = ""
 
 
 @dataclass
@@ -45,10 +48,20 @@ class Clearing:
 
 
 @dataclass
+class Forest:
+    """Forest region adjacent to clearings."""
+
+    forest_id: int
+    adjacent_clearings: list[int]
+    adjacent_forests: list[int] = field(default_factory=list)
+
+
+@dataclass
 class BoardState:
     """Piece placement data keyed by clearing and faction."""
 
     clearings: dict[int, Clearing]
+    forests: dict[int, Forest] = field(default_factory=dict)
     warriors: dict[int, dict[Faction, int]] = field(default_factory=dict)
     buildings: dict[int, dict[Faction, list[BuildingType]]] = field(
         default_factory=dict
@@ -127,6 +140,7 @@ class AllianceState:
 @dataclass
 class VagabondState:
     location: Optional[int] = None
+    forest_location: Optional[int] = None
     character: str = "thief"
     satchel: dict[ItemType, int] = field(default_factory=dict)
     tracks: dict[ItemType, int] = field(default_factory=dict)
@@ -184,6 +198,8 @@ class GameState:
     decision_context: DecisionContext
     pending_interrupts: list[str] = field(default_factory=list)
     crafted_items: dict[Faction, dict[ItemType, int]] = field(default_factory=dict)
+    crafted_cards: dict[Faction, list[int]] = field(default_factory=dict)
+    item_supply: dict[ItemType, int] = field(default_factory=dict)
     quests: dict[str, dict] = field(default_factory=dict)
     quest_deck: list[str] = field(default_factory=list)
 

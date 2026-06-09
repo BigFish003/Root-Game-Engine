@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ..cards import item_type_from_card_name
 from ..actions import (
     Craft,
     EndPhase,
@@ -20,7 +19,12 @@ from ..actions import (
 from ..enums import BuildingType, CardTag, DecisionType, Faction, Phase, Suit, TokenType
 from ..models import GameState
 from .combat import legal_battle_clearings, legal_battle_targets, resolve_basic_battle
-from .crafting import legal_craft_cards
+from .crafting import (
+    add_crafted_item,
+    legal_craft_cards,
+    record_crafted_card,
+    take_item_from_supply,
+)
 from .movement import legal_move_destinations, legal_move_sources
 from .pieces import return_building_to_supply, return_token_to_supply
 
@@ -100,14 +104,14 @@ def apply_craft(state: GameState, action: Craft) -> None:
         raise ValueError("Crafting is only available at the start of Daylight")
     card = state.cards[action.card_id]
     state.alliance.hand.remove(action.card_id)
+    record_crafted_card(state, Faction.ALLIANCE, action.card_id)
     if card.vp_on_craft > 0:
         state.scores[Faction.ALLIANCE] += card.vp_on_craft
     if card.name.startswith("Favor of the"):
         _resolve_favor(state, card.suit)
-    if CardTag.ITEM in card.tags:
-        item = item_type_from_card_name(card.name)
-        crafted = state.crafted_items.setdefault(Faction.ALLIANCE, {})
-        crafted[item] = crafted.get(item, 0) + 1
+    if card.item_reward is not None:
+        take_item_from_supply(state, card.item_reward)
+        add_crafted_item(state, Faction.ALLIANCE, card.item_reward)
     if CardTag.PERSISTENT_EFFECT in card.tags:
         state.alliance.crafted_effects.append(card.name)
     else:

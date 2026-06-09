@@ -8,7 +8,7 @@ from typing import Optional
 
 from .cards import create_base_deck
 from .enums import BuildingType, Faction, ItemType, Suit, TokenType
-from .map_data import create_base_map
+from .map_data import create_base_forests, create_base_map
 from .models import (
     AllianceState,
     BoardState,
@@ -19,6 +19,7 @@ from .models import (
     TurnState,
     VagabondState,
 )
+from .rules.crafting import create_item_supply
 
 
 def create_initial_state(
@@ -31,6 +32,7 @@ def create_initial_state(
     clearings = create_base_map()
     board = BoardState(
         clearings=clearings,
+        forests=create_base_forests(),
         warriors={cid: {f: 0 for f in Faction} for cid in clearings},
         buildings={cid: {f: [] for f in Faction} for cid in clearings},
         tokens={cid: {f: [] for f in Faction} for cid in clearings},
@@ -62,6 +64,8 @@ def create_initial_state(
         turn=TurnState(),
         decision_context=DecisionContext(),
         crafted_items={f: {} for f in Faction},
+        crafted_cards={f: [] for f in Faction},
+        item_supply=create_item_supply(),
         quests=_create_quest_lookup(),
         quest_deck=[],
     )
@@ -108,6 +112,7 @@ def _setup_starting_positions(
     # Vagabond opening (forest abstracted as clearing 12 adjacency anchor)
     if Faction.VAGABOND not in excluded_factions:
         state.vagabond.location = 0
+        state.vagabond.forest_location = 1
         state.vagabond.character = "thief"
         for item in [ItemType.TORCH, ItemType.SWORD, ItemType.BOOT]:
             state.vagabond.satchel[item] = state.vagabond.satchel.get(item, 0) + 1

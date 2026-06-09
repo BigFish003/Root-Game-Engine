@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .enums import CardTag, Suit
+from .enums import CardTag, ItemType, Suit
 from .models import Card
 
 BASE_DECK_SPECS: list[dict] = [
@@ -39,6 +39,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Birdy Bindle",
         "suit": Suit.BIRD,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BAG,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 1,
@@ -47,6 +48,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Woodland Runners",
         "suit": Suit.BIRD,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BOOT,
         "count": 1,
         "cost": {Suit.RABBIT: 1},
         "vp": 1,
@@ -55,6 +57,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Arms Trader",
         "suit": Suit.BIRD,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.SWORD,
         "count": 1,
         "cost": {Suit.FOX: 2},
         "vp": 2,
@@ -63,6 +66,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Crossbow",
         "suit": Suit.BIRD,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.CROSSBOW,
         "count": 1,
         "cost": {Suit.FOX: 1},
         "vp": 1,
@@ -107,6 +111,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Bake Sale",
         "suit": Suit.RABBIT,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.COIN,
         "count": 1,
         "cost": {Suit.RABBIT: 2},
         "vp": 3,
@@ -115,6 +120,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Smuggler's Trail",
         "suit": Suit.RABBIT,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BAG,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 1,
@@ -123,6 +129,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Root Tea",
         "suit": Suit.RABBIT,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.TEAPOT,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 2,
@@ -131,6 +138,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "A Visit to Friends",
         "suit": Suit.RABBIT,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BOOT,
         "count": 1,
         "cost": {Suit.RABBIT: 1},
         "vp": 1,
@@ -138,7 +146,7 @@ BASE_DECK_SPECS: list[dict] = [
     {
         "name": "Favor of the Rabbits",
         "suit": Suit.RABBIT,
-        "tags": (CardTag.ITEM,),
+        "tags": (),
         "count": 1,
         "cost": {Suit.RABBIT: 3},
     },
@@ -175,6 +183,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Crossbow",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.CROSSBOW,
         "count": 1,
         "cost": {Suit.FOX: 1},
         "vp": 1,
@@ -183,6 +192,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Sword",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.SWORD,
         "count": 1,
         "cost": {Suit.FOX: 2},
         "vp": 2,
@@ -191,6 +201,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Travel Gear",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BOOT,
         "count": 1,
         "cost": {Suit.RABBIT: 1},
         "vp": 1,
@@ -199,6 +210,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Investments",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.COIN,
         "count": 1,
         "cost": {Suit.RABBIT: 2},
         "vp": 3,
@@ -206,7 +218,7 @@ BASE_DECK_SPECS: list[dict] = [
     {
         "name": "Favor of the Mice",
         "suit": Suit.MOUSE,
-        "tags": (CardTag.ITEM,),
+        "tags": (),
         "count": 1,
         "cost": {Suit.MOUSE: 3},
     },
@@ -214,6 +226,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Root Tea",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.TEAPOT,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 2,
@@ -222,6 +235,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Mouse-in-a-Sack",
         "suit": Suit.MOUSE,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BAG,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 1,
@@ -259,6 +273,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Root Tea",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.TEAPOT,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 2,
@@ -267,6 +282,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Protection Racket",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.COIN,
         "count": 1,
         "cost": {Suit.RABBIT: 2},
         "vp": 3,
@@ -275,6 +291,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Travel Gear",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BOOT,
         "count": 1,
         "cost": {Suit.RABBIT: 1},
         "vp": 1,
@@ -283,6 +300,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Gently Used Knapsack",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.BAG,
         "count": 1,
         "cost": {Suit.MOUSE: 1},
         "vp": 1,
@@ -290,7 +308,7 @@ BASE_DECK_SPECS: list[dict] = [
     {
         "name": "Favor of the Foxes",
         "suit": Suit.FOX,
-        "tags": (CardTag.ITEM,),
+        "tags": (),
         "count": 1,
         "cost": {Suit.FOX: 3},
     },
@@ -298,6 +316,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Foxfolk Steel",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.SWORD,
         "count": 1,
         "cost": {Suit.FOX: 2},
         "vp": 2,
@@ -306,6 +325,7 @@ BASE_DECK_SPECS: list[dict] = [
         "name": "Anvil",
         "suit": Suit.FOX,
         "tags": (CardTag.ITEM,),
+        "item": ItemType.HAMMER,
         "count": 1,
         "cost": {Suit.FOX: 1},
         "vp": 2,
@@ -344,10 +364,27 @@ def create_base_deck() -> list[Card]:
                     craft_cost_any=spec.get("cost_any", 0),
                     craftable=spec.get("craftable", True),
                     vp_on_craft=spec.get("vp", 0),
+                    item_reward=spec.get("item"),
+                    effect_type=_effect_type(spec),
+                    effect_behavior=spec.get("effect", ""),
                 )
             )
             card_id += 1
     return cards
+
+
+def _effect_type(spec: dict) -> str:
+    if not spec.get("craftable", True):
+        if CardTag.AMBUSH in spec.get("tags", ()):
+            return "ambush"
+        if CardTag.DOMINANCE in spec.get("tags", ()):
+            return "dominance"
+        return "uncraftable"
+    if spec.get("item") is not None:
+        return "item"
+    if CardTag.PERSISTENT_EFFECT in spec.get("tags", ()):
+        return "persistent"
+    return "immediate"
 
 
 def item_type_from_card_name(name: str):

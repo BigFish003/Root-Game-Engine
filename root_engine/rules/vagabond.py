@@ -28,6 +28,12 @@ from ..enums import (
 )
 from ..models import GameState
 from . import alliance as alliance_rules
+from .crafting import (
+    add_crafted_item,
+    can_craft_card_effect,
+    record_crafted_card,
+    take_item_from_supply,
+)
 from .pieces import return_building_to_supply, return_token_to_supply
 
 TRACK_ITEMS = {ItemType.TEAPOT, ItemType.COIN, ItemType.BAG}
@@ -51,7 +57,7 @@ def valid_actions(state: GameState) -> list:
     if state.turn.phase == Phase.BIRDSONG:
         if state.decision_context.selected_destination is not None:
             return [EndPhase()]
-        return [EndPhase(), *[VagabondSlip(dest) for dest in _slip_destinations(state)]]
+        return [EndPhase(), *_slip_actions(state)]
     if state.turn.phase == Phase.EVENING:
         return [EndPhase()]
 
@@ -96,15 +102,30 @@ def valid_actions(state: GameState) -> list:
 
 
 def apply_slip(state: GameState, action: VagabondSlip) -> None:
+    if (
+        state.turn.phase != Phase.BIRDSONG
+        or state.decision_context.selected_destination is not None
+    ):
+        raise ValueError("Vagabond can slip only once during Birdsong")
+    if action not in _slip_actions(state):
+        raise ValueError("Vagabond cannot slip to that destination")
+    if action.destination_is_forest:
+        state.vagabond.location = 0
+        state.vagabond.forest_location = action.destination
+        state.decision_context.selected_destination = 0
+        return
     state.vagabond.location = action.destination
+    state.vagabond.forest_location = None
     state.decision_context.selected_destination = action.destination
 
 
 def apply_move(state: GameState, action: VagabondMove) -> None:
+    if action.destination not in _move_destinations(state):
+        raise ValueError("Vagabond cannot move to that clearing")
     cost = 1 + (1 if _has_hostile_warrior(state, action.destination) else 0)
     _exhaust(state, ItemType.BOOT, cost)
     state.vagabond.location = action.destination
-    alliance_rules.trigger_outrage(state, Faction.VAGABOND, action.destination)
+    state.vagabond.forest_location = None
 
 
 def apply_explore(state: GameState, action: VagabondExplore) -> None:
@@ -186,6 +207,8 @@ def apply_strike(state: GameState, action: VagabondStrike) -> None:
 
 
 def apply_repair(state: GameState, action: VagabondRepair) -> None:
+    if state.vagabond.damaged_items.get(action.damaged_item, 0) <= 0:
+        raise ValueError("Item is not damaged")
     _exhaust(state, ItemType.HAMMER, 1)
     _move_count(state.vagabond.damaged_items, action.damaged_item, -1)
     _gain_item(state, action.damaged_item)
@@ -255,10 +278,13 @@ def apply_craft(state: GameState, action: Craft) -> None:
     hammer_cost = sum(card.craft_cost.values()) + card.craft_cost_any
     _exhaust(state, ItemType.HAMMER, hammer_cost)
     state.vagabond.hand.remove(action.card_id)
+    record_crafted_card(state, Faction.VAGABOND, action.card_id)
     if card.vp_on_craft > 0:
         state.scores[Faction.VAGABOND] += card.vp_on_craft
-    if CardTag.ITEM in card.tags:
-        _gain_item(state, _item_from_card_name(card.name))
+    if card.item_reward is not None:
+        take_item_from_supply(state, card.item_reward)
+        add_crafted_item(state, Faction.VAGABOND, card.item_reward)
+        _gain_item(state, card.item_reward)
     elif CardTag.PERSISTENT_EFFECT in card.tags:
         state.vagabond.crafted_effects.append(card.name)
     else:
@@ -301,7 +327,7 @@ def refresh_items(state: GameState) -> None:
 
 
 def evening_rest_and_draw(state: GameState) -> int:
-    if state.vagabond.location == 0:
+    if _is_in_forest(state):
         for item in list(state.vagabond.damaged_items):
             while state.vagabond.damaged_items.get(item, 0) > 0:
                 _move_count(state.vagabond.damaged_items, item, -1)
@@ -325,21 +351,49 @@ def enforce_item_capacity(state: GameState) -> None:
         _move_count(pool, item, -1)
 
 
-def _slip_destinations(state: GameState) -> list[int]:
+def _slip_actions(state: GameState) -> list[VagabondSlip]:
     loc = state.vagabond.location
-    if loc == 0 or loc is None:
-        return sorted(state.board.clearings)
-    return [0, *state.board.clearings[loc].adjacent_clearings]
+    if loc == 0:
+        forest_id = _current_forest(state)
+        if forest_id in state.board.forests:
+            forest = state.board.forests[forest_id]
+            actions = [
+                VagabondSlip(clearing_id)
+                for clearing_id in sorted(forest.adjacent_clearings)
+            ]
+            actions.extend(
+                VagabondSlip(adjacent_forest, destination_is_forest=True)
+                for adjacent_forest in sorted(forest.adjacent_forests)
+            )
+            return actions
+        return [VagabondSlip(clearing_id) for clearing_id in sorted(state.board.clearings)]
+    if loc is None:
+        return [
+            VagabondSlip(forest_id, destination_is_forest=True)
+            for forest_id in sorted(state.board.forests)
+        ]
+    clearing = state.board.clearings[loc]
+    actions = [VagabondSlip(dest) for dest in clearing.adjacent_clearings]
+    actions.extend(
+        VagabondSlip(forest_id, destination_is_forest=True)
+        for forest_id in clearing.adjacent_forests
+    )
+    return actions
 
 
 def _move_destinations(state: GameState) -> list[int]:
     loc = state.vagabond.location
-    if loc == 0 or loc is None:
+    if loc == 0:
+        if _ready_count(state, ItemType.BOOT) <= 0:
+            return []
+        forest_id = _current_forest(state)
         return (
-            sorted(state.board.clearings)
-            if _ready_count(state, ItemType.BOOT) > 0
+            sorted(state.board.forests[forest_id].adjacent_clearings)
+            if forest_id in state.board.forests
             else []
         )
+    if loc is None:
+        return []
     if _ready_count(state, ItemType.BOOT) <= 0:
         return []
     return [
@@ -565,7 +619,7 @@ def _legal_craft_cards(state: GameState) -> list[int]:
     result = []
     for card_id in state.vagabond.hand:
         card = state.cards[card_id]
-        if not card.craftable:
+        if not can_craft_card_effect(state, Faction.VAGABOND, card):
             continue
         if card.craft_cost_any and hammers >= card.craft_cost_any:
             result.append(card_id)
@@ -578,29 +632,18 @@ def _legal_craft_cards(state: GameState) -> list[int]:
     return result
 
 
-def _item_from_card_name(name: str) -> ItemType:
-    lowered = name.lower()
-    if "tea" in lowered or "sale" in lowered:
-        return ItemType.TEAPOT
-    if "coin" in lowered or "investments" in lowered or "racket" in lowered:
-        return ItemType.COIN
-    if "knapsack" in lowered or "bindle" in lowered or "sack" in lowered:
-        return ItemType.BAG
-    if (
-        "boot" in lowered
-        or "runner" in lowered
-        or "gear" in lowered
-        or "visit" in lowered
-        or "trail" in lowered
-    ):
-        return ItemType.BOOT
-    if "crossbow" in lowered:
-        return ItemType.CROSSBOW
-    if "sword" in lowered or "steel" in lowered or "arms" in lowered:
-        return ItemType.SWORD
-    if "anvil" in lowered:
-        return ItemType.HAMMER
-    return ItemType.TEAPOT
+def _is_in_forest(state: GameState) -> bool:
+    return state.vagabond.location == 0 or (
+        state.vagabond.location is None and state.vagabond.forest_location is not None
+    )
+
+
+def _current_forest(state: GameState) -> int | None:
+    if state.vagabond.forest_location in state.board.forests:
+        return state.vagabond.forest_location
+    if state.board.forests:
+        return min(state.board.forests)
+    return None
 
 
 def _draw_cards(state: GameState, hand: list[int], count: int) -> None:
